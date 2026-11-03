@@ -180,3 +180,17 @@ assert.equal(getFifthWeekdayPaymentDate("2026-10-01"), "2026-11-09");
 assert.equal(getFifthWeekdayPaymentDate("2026-10-31"), "2026-11-09");
 assert.equal(getFifthWeekdayPaymentDate("2026-04-30"), "2026-05-08");
 assert.equal(matchesPaymentSchedule("period", "hours"), true);
+
+// Finais de semana são apenas linhas do relatório e nunca substituem registros.
+const { includeReportWeekends } = require("./logic.js");
+const saturdayWork = {date:"2026-11-07", valueMode:"halfDaily", finalValue:60};
+const sundayAbsence = {date:"2026-11-08", recordType:"absence", notes:"Motivo informado"};
+const reportWeekends = includeReportWeekends([saturdayWork, sundayAbsence], "2026-11-01", "2026-11-09");
+assert.equal(reportWeekends.length, 3);
+assert.equal(reportWeekends.filter(x => x.recordType === "reportDayOff").length, 1);
+assert.equal(reportWeekends.find(x => x.date === "2026-11-07"), saturdayWork);
+assert.equal(reportWeekends.find(x => x.date === "2026-11-08"), sundayAbsence);
+assert.equal(reportWeekends.reduce((sum,x) => sum + (x.finalValue || 0), 0), 60);
+assert.equal(includeReportWeekends([], "2026-11-07", "2026-11-08").length, 2);
+assert.equal(includeReportWeekends([], "", "").length, 0);
+assert.equal(includeReportWeekends([], "2026-11-07", "2026-11-08", [saturdayWork,sundayAbsence]).length, 0);

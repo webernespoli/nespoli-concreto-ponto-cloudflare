@@ -261,12 +261,27 @@
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
   }
 
+  function includeReportWeekends(entries = [], start, end, recordedEntries = entries) {
+    const rows = [...entries];
+    const parse = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? new Date(`${value}T00:00:00Z`) : null;
+    const first = parse(start), last = parse(end);
+    if (!first || !last || !Number.isFinite(+first) || !Number.isFinite(+last) || first > last) return rows;
+    const occupied = new Set(recordedEntries.map((entry) => entry.date));
+    for (const date = new Date(first); date <= last; date.setUTCDate(date.getUTCDate() + 1)) {
+      const day = date.getUTCDay(), iso = date.toISOString().slice(0, 10);
+      if ((day === 0 || day === 6) && !occupied.has(iso)) {
+        rows.push({ date: iso, recordType: "reportDayOff", notes: day === 0 ? "Domingo — sem expediente" : "Sábado — sem expediente (sem lançamento)" });
+      }
+    }
+    return rows.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   function matchesPaymentSchedule(paySchedule, group = "hours") {
     if (group === "all") return true;
     const isFifthWeekday = paySchedule === "monthlyFifthWeekday";
     return group === "fifthWeekday" ? isFifthWeekday : !isFifthWeekday;
   }
 
-  return { calculateJourney, formatDuration, formatSignedDuration, resolveRateHistory, summarizePayments, summarizeOutstanding, summarizePaid, isAbsence, getClosePeriod, getCurrentCloseType, isBalanceCarryover, getFifthWeekdayPaymentDate, matchesPaymentSchedule, parseMoneyInput, roundMoney, timeToMinutes };
+  return { includeReportWeekends, calculateJourney, formatDuration, formatSignedDuration, resolveRateHistory, summarizePayments, summarizeOutstanding, summarizePaid, isAbsence, getClosePeriod, getCurrentCloseType, isBalanceCarryover, getFifthWeekdayPaymentDate, matchesPaymentSchedule, parseMoneyInput, roundMoney, timeToMinutes };
 });
 

@@ -405,6 +405,7 @@
     $("#exportCsvBtn").addEventListener("click", exportCSV);
     $("#printReportBtn").addEventListener("click", () => { if (!$("#printReportBtn").disabled) window.print(); });
     dom.reportEmployeeSelect.addEventListener("change", refreshReportPreview);
+    $("#reportIncludeWeekends").addEventListener("change", refreshReportPreview);
     $("#toggleFiltersBtn").addEventListener("click", () => dom.filtersPanel.classList.toggle("open"));
     $("#clearFiltersBtn").addEventListener("click", () => {
       dom.filterPaySchedule.value = "hours";
@@ -1818,7 +1819,7 @@
 
     const { entries, advances } = getReportData();
     const groups = groupForReport(entries, advances);
-    const hasData = entries.length > 0 || advances.length > 0;
+    const hasData = entries.length > 0 || advances.length > 0 || groups.some((group) => reportRows(group.entries, group.employeeId).length > 0);
     const selectedName = selectedEmployee === "all"
       ? `${groups.length} colaborador(es), cada um em sua própria folha`
       : groups[0]?.name || dom.reportEmployeeSelect.selectedOptions[0]?.textContent || "Colaborador";
@@ -1834,6 +1835,20 @@
     return `${dom.filterStart.value ? dateBR(dom.filterStart.value) : "Início"} a ${dom.filterEnd.value ? dateBR(dom.filterEnd.value) : "Hoje"}`;
   }
 
+  function reportDateLabel(date) {
+    const weekday = new Date(`${date}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
+    return `${dateBR(date)} • ${weekday}`;
+  }
+
+  function reportRows(items, employeeId) {
+    if (!$("#reportIncludeWeekends").checked || dom.filterStatus.value !== "all") return [...items].sort((a, b) => a.date.localeCompare(b.date));
+    const recorded = state.entries.filter((entry) => entry.employeeId === employeeId);
+    const dates = [...items.map((entry) => entry.date), ...state.advances.filter((advance) => advance.employeeId === employeeId).map((advance) => advance.date)].filter(Boolean).sort();
+    const start = dom.filterStart.value || dates[0];
+    const end = dom.filterEnd.value || dates.at(-1);
+    return L.includeReportWeekends(items, start, end, recorded);
+  }
+
   function groupForReport(entries, advances) {
     const grouped = new Map();
     entries.forEach((entry) => {
@@ -1844,12 +1859,16 @@
       if (!grouped.has(advance.employeeId)) grouped.set(advance.employeeId, { entries: [], advances: [] });
       grouped.get(advance.employeeId).advances.push(advance);
     });
+    const selected = dom.reportEmployeeSelect.value;
+    if ($("#reportIncludeWeekends").checked && selected && selected !== "all" && dom.filterStart.value && dom.filterEnd.value && dom.filterStatus.value === "all" && !grouped.has(selected)) {
+      grouped.set(selected, { entries: [], advances: [] });
+    }
     return [...grouped.entries()].map(([employeeId, group]) => ({ employeeId, name: displayEmployeeName(employeeId, group.entries[0] || group.advances[0]), ...group }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }
 
   function buildWhatsappText(entries, advances) {
-    if (!entries.length && !advances.length) return `*NESPOLI BI — CONTROLES DE ACESSO E PAGAMENTOS*\nControles de acesso e pagamentos\nPeríodo: ${reportPeriodText()}\n\nNenhum lançamento encontrado.`;
+    if (!groupForReport(entries, advances).length) return `*NESPOLI BI — CONTROLES DE ACESSO E PAGAMENTOS*\nControles de acesso e pagamentos\nPeríodo: ${reportPeriodText()}\n\nNenhum lançamento encontrado.`;
     const outstandingItems = entries.filter((entry) => !L.isAbsence(entry)).map((entry) => {
       const calc = calculateEntry(entry);
       return { employeeId: entry.employeeId, status: entry.status, paidDate: entry.paidDate, finalValue: calc.valid ? calc.finalValue : 0 };
@@ -1860,8 +1879,9 @@
     const sections = groupForReport(entries, advances).map(({ employeeId, name, entries: items, advances: employeeAdvances }) => {
       let subtotal = 0, minutes = 0;
       const absenceCount = items.filter(L.isAbsence).length;
-      const lines = items.sort((a, b) => a.date.localeCompare(b.date)).map((entry) => {
-        if (L.isAbsence(entry)) return `• ${dateBR(entry.date)} | *FALTA* | ${entry.notes || "Sem justificativa informada"}`;
+      const lines = reportRows(items, employeeId).map((entry) => {
+        if (entry.recordType === "reportDayOff") return `• ${reportDateLabel(entry.date)} | ${entry.notes} | Informativo — sem efeito no pagamento`;
+        if (L.isAbsence(entry)) return `• ${reportDateLabel(entry.date)} | *FALTA* | ${entry.notes || "Sem justificativa informada"}`;
         const calc = calculateEntry(entry);
         subtotal += calc.finalValue; minutes += entryMinutesForPayment(entry, calc); grossTotal += calc.finalValue;
         const adjustment = calc.manualValue !== null ? ` • ajuste: ${entry.manualReason || "valor manual"}` : "";
@@ -1871,7 +1891,7 @@
           : "Não pago";
         const hoursText = entry.valueMode === "halfDaily" ? "meia diária (4h)" : entry.valueMode === "fullDaily" ? "1 diária completa (8h)" : entry.valueMode === "balance8h" ? `somente saldo ${L.formatSignedDuration(calc.balanceMinutes)}` : L.formatDuration(calc.workedMinutes);
         const journeyText = entry.valueMode === "halfDaily" ? "MEIA DIÁRIA" : entry.valueMode === "fullDaily" ? "DIÁRIA COMPLETA" : `${entry.start}–${entry.end}`;
-        return `• ${dateBR(entry.date)} | ${journeyText} | ${hoursText} | ${paymentBaseLabel(calc)} | ${currency.format(calc.finalValue)} | ${paymentLabel}${balance}${adjustment}`;
+        return `• ${reportDateLabel(entry.date)} | ${journeyText} | ${hoursText} | ${paymentBaseLabel(calc)} | ${currency.format(calc.finalValue)} | ${paymentLabel}${balance}${adjustment}`;
       });
       const employeeAdvancesTotal = employeeAdvances.reduce((sum, advance) => sum + Number(advance.value), 0);
       advancesTotal += employeeAdvancesTotal;
@@ -1907,9 +1927,11 @@
       let paidSubtotal = 0, pendingSubtotal = 0;
       const absenceCount = items.filter(L.isAbsence).length;
       const workItems = items.filter((entry) => !L.isAbsence(entry));
-      const rows = items.sort((a, b) => a.date.localeCompare(b.date)).map((entry) => {
+      const displayRows = reportRows(items, employeeId);
+      const rows = displayRows.map((entry) => {
+        if (entry.recordType === "reportDayOff") return `<tr><td>${reportDateLabel(entry.date)}</td><td colspan="4">${escapeHTML(entry.notes)}</td><td>—</td><td>Informativo</td></tr>`;
         if (L.isAbsence(entry)) {
-          return `<tr class="absence-row"><td>${dateBR(entry.date)}</td><td colspan="4"><strong>FALTA</strong><div class="report-absence-note">${escapeHTML(entry.notes || "Sem justificativa informada")}</div></td><td>${currency.format(0)}</td><td>Falta registrada</td></tr>`;
+          return `<tr class="absence-row"><td>${reportDateLabel(entry.date)}</td><td colspan="4"><strong>FALTA</strong><div class="report-absence-note">${escapeHTML(entry.notes || "Sem justificativa informada")}</div></td><td>${currency.format(0)}</td><td>Falta registrada</td></tr>`;
         }
         const calc = calculateEntry(entry);
         subtotal += calc.finalValue;
@@ -1927,7 +1949,7 @@
         const journeyText = isHalfDaily ? "Meia diária" : isFullDaily ? "Diária completa" : `${entry.start}–${entry.end}`;
         const interval = isDailyWithoutTimes ? "—" : entry.breakStart && entry.breakEnd ? `${entry.breakStart}–${entry.breakEnd}` : "Sem intervalo";
         const hoursText = isHalfDaily ? "½ diária (4h)" : isFullDaily ? "1 diária (8h)" : entry.valueMode === "balance8h" ? `<strong>Saldo ${L.formatSignedDuration(calc.balanceMinutes)}</strong>` : L.formatDuration(calc.workedMinutes);
-        return `<tr><td>${dateBR(entry.date)}</td><td>${journeyText}</td><td>${interval}</td><td>${hoursText}</td><td>${escapeHTML(paymentBaseLabel(calc))}<div class="report-adjustment">${currency.format(calc.hourlyRate)}/h</div></td><td>${currency.format(calc.finalValue)}${balance}${adjustment}</td><td>${paymentLabel}</td></tr>`;
+        return `<tr><td>${reportDateLabel(entry.date)}</td><td>${journeyText}</td><td>${interval}</td><td>${hoursText}</td><td>${escapeHTML(paymentBaseLabel(calc))}<div class="report-adjustment">${currency.format(calc.hourlyRate)}/h</div></td><td>${currency.format(calc.finalValue)}${balance}${adjustment}</td><td>${paymentLabel}</td></tr>`;
       }).join("");
       const employeeAdvancesTotal = employeeAdvances.reduce((sum, advance) => sum + Number(advance.value), 0);
       const advanceRows = employeeAdvances.sort((a, b) => a.date.localeCompare(b.date)).map((advance) => `<tr><td>${dateBR(advance.date)}</td><td>${escapeHTML(advance.note || "Vale/adiantamento")}</td><td>− ${currency.format(advance.value)}</td><td>${advance.status === "paid" ? `Pago/descontado${advance.paidDate ? `<div class="report-payment-date">em ${dateBR(advance.paidDate)}</div>` : ""}` : "Não pago"}</td></tr>`).join("");
@@ -1953,7 +1975,7 @@
         ? paymentStatusText(paymentSummary)
         : absenceCount ? `${absenceCount} ${absenceCount === 1 ? "falta registrada" : "faltas registradas"}` : "Somente vales";
       const lastClass = groupIndex === groups.length - 1 ? " is-last" : "";
-      const reportRowCount = items.length + employeeAdvances.length;
+      const reportRowCount = displayRows.length + employeeAdvances.length;
       const densityClass = reportRowCount > 22 ? " print-ultra-compact" : reportRowCount > 14 ? " print-compact" : "";
 
       return `<section class="payslip${lastClass}${densityClass}">
@@ -1968,7 +1990,7 @@
           <div><span>Emitido em</span><strong>${generatedAt}</strong></div>
         </div>
         <div class="payslip-block">
-          <h3>Jornadas e faltas do período</h3>
+          <h3>Jornadas, faltas e dias sem expediente</h3>
           <div class="table-wrap"><table><thead><tr><th>Data</th><th>Jornada</th><th>Intervalo</th><th>Horas</th><th>Base de cálculo</th><th>Valor</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Sem jornadas no período.</td></tr>'}</tbody></table></div>
         </div>
         ${advanceRows ? `<div class="payslip-block payslip-advances"><h3>Vales / adiantamentos</h3><div class="table-wrap"><table><thead><tr><th>Data do vale</th><th>Descrição</th><th>Desconto</th><th>Situação</th></tr></thead><tbody>${advanceRows}</tbody></table></div></div>` : ""}
@@ -2012,6 +2034,11 @@
       }
       const calc = calculateEntry(entry);
       lines.push([entry.valueMode === "halfDaily" ? "MEIA DIÁRIA" : entry.valueMode === "fullDaily" ? "DIÁRIA COMPLETA" : entry.valueMode === "balance8h" ? "SALDO DE HORAS" : "JORNADA", displayEmployeeName(entry.employeeId, entry), companyName, dateBR(entry.date), entry.start, entry.breakStart || "", entry.breakEnd || "", entry.end, L.formatDuration(calc.workedMinutes), entry.valueMode === "balance8h" ? L.formatSignedDuration(calc.balanceMinutes) : "", calc.paymentType === "monthly" ? "Mensalista" : "Diária", calc.paymentType === "monthly" ? calc.monthlySalary.toFixed(2) : calc.dailyRate.toFixed(2), calc.hourlyRate.toFixed(2), calc.calculatedValue.toFixed(2), calc.finalValue.toFixed(2), calc.adjustment.toFixed(2), entry.manualReason || "", entry.status === "paid" ? "Pago" : "Não pago", entry.paidDate ? dateBR(entry.paidDate) : "", entry.notes || ""]);
+    });
+    groupForReport(entries, advances).forEach((group) => {
+      reportRows(group.entries, group.employeeId).filter((entry) => entry.recordType === "reportDayOff").forEach((entry) => {
+        lines.push(["SEM EXPEDIENTE", group.name, employeeCompanyName(getEmployee(group.employeeId)), reportDateLabel(entry.date), "", "", "", "", "", "", "", "", "", "", "", "", "", "Informativo", "", entry.notes]);
+      });
     });
     advances.forEach((advance) => {
       const employee = getEmployee(advance.employeeId);
