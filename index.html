@@ -53,7 +53,7 @@
       <div class="payment-group-bar" aria-label="Separar grupos de pagamento">
         <strong>Mostrar:</strong>
         <button class="payment-group-chip active" data-pay-group="hours" type="button">Quem recebe por horas trabalhadas</button>
-        <button class="payment-group-chip" data-pay-group="fifthWeekday" type="button">Alice — 5º dia útil</button>
+        <button class="payment-group-chip" data-pay-group="fifthWeekday" type="button">Colaborador — 5º dia útil</button>
         <button class="payment-group-chip" data-pay-group="all" type="button">Todos</button>
       </div>
 
@@ -238,7 +238,7 @@
             <label for="filterPaySchedule">Grupo de pagamento</label>
             <select id="filterPaySchedule">
               <option value="hours">Recebem por horas trabalhadas</option>
-              <option value="fifthWeekday">Alice — recebe no 5º dia útil</option>
+              <option value="fifthWeekday">Colaborador — recebe no 5º dia útil</option>
               <option value="all">Todos os grupos</option>
             </select>
           </div>
@@ -451,9 +451,9 @@
             <label for="employeePaySchedule">Grupo de pagamento</label>
             <select id="employeePaySchedule">
               <option value="period">Recebe pelas horas trabalhadas — no fechamento</option>
-              <option value="monthlyFifthWeekday">Recebe no 5º dia útil — segunda a sexta</option>
+              <option value="monthlyFifthWeekday">Recebe no 5º dia útil — seg–sex, exceto feriados nacionais</option>
             </select>
-            <small>Para a Alice, escolha a opção do 5º dia útil.</small>
+            <small>Escolha esta opção somente para o colaborador que recebe no 5º dia útil.</small>
           </div>
         </div>
       </section>
@@ -659,3 +659,4 @@
   <script src="app.js?v=25"></script>
 </body>
 </html>
+

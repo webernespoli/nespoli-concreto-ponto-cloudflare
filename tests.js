@@ -81,7 +81,7 @@ assert.equal(isBalanceCarryover({ date: "2026-09-21", valueMode: "balance8h" }, 
 assert.equal(isBalanceCarryover({ date: "2026-09-21", valueMode: "worked" }, "2026-09-22", "close7"), false);
 assert.equal(isBalanceCarryover({ date: "2026-09-21", valueMode: "balance8h" }, "2026-09-22", "close20"), false);
 assert.equal(getFifthWeekdayPaymentDate("2026-09-21"), "2026-10-07");
-assert.equal(getFifthWeekdayPaymentDate("2026-12-31"), "2027-01-07");
+assert.equal(getFifthWeekdayPaymentDate("2026-12-31"), "2027-01-08");
 assert.equal(getFifthWeekdayPaymentDate("data-invalida"), "");
 assert.equal(matchesPaymentSchedule("period", "hours"), true);
 assert.equal(matchesPaymentSchedule("monthlyFifthWeekday", "hours"), false);
@@ -173,3 +173,10 @@ assert.equal(isAbsence({ recordType: "work" }), false);
 assert.equal(isAbsence({}), false);
 
 console.log("Todos os testes de cálculo passaram.");
+
+
+// O feriado de Finados e o fim de semana não contam no grupo do 5º dia útil.
+assert.equal(getFifthWeekdayPaymentDate("2026-10-01"), "2026-11-09");
+assert.equal(getFifthWeekdayPaymentDate("2026-10-31"), "2026-11-09");
+assert.equal(getFifthWeekdayPaymentDate("2026-04-30"), "2026-05-08");
+assert.equal(matchesPaymentSchedule("period", "hours"), true);

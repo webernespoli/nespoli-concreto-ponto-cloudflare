@@ -237,6 +237,8 @@
     return entry.date === previousISO;
   }
 
+  // Calendário do grupo: segunda a sexta, excluindo feriados nacionais fixos.
+  // O vencimento é no mês seguinte ao mês trabalhado; não altera horas ou valores.
   function getFifthWeekdayPaymentDate(referenceDate) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(referenceDate || ""));
     if (!match) return "";
@@ -244,11 +246,16 @@
     const month = Number(match[2]);
     if (month < 1 || month > 12) return "";
 
+    const nationalHolidays = new Set([
+      "01-01", "04-21", "05-01", "09-07", "10-12",
+      "11-02", "11-15", "11-20", "12-25"
+    ]);
     const date = new Date(Date.UTC(year, month, 1));
     let weekdays = 0;
     while (weekdays < 5) {
       const day = date.getUTCDay();
-      if (day >= 1 && day <= 5) weekdays += 1;
+      const monthDay = `${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+      if (day >= 1 && day <= 5 && !nationalHolidays.has(monthDay)) weekdays += 1;
       if (weekdays < 5) date.setUTCDate(date.getUTCDate() + 1);
     }
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
@@ -262,3 +269,4 @@
 
   return { calculateJourney, formatDuration, formatSignedDuration, resolveRateHistory, summarizePayments, summarizeOutstanding, summarizePaid, isAbsence, getClosePeriod, getCurrentCloseType, isBalanceCarryover, getFifthWeekdayPaymentDate, matchesPaymentSchedule, parseMoneyInput, roundMoney, timeToMinutes };
 });
+

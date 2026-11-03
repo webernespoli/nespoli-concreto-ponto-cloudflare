@@ -808,8 +808,8 @@
     const referenceDate = pendingDates[0] || allDates.at(-1) || "";
     const dueDate = L.getFifthWeekdayPaymentDate(referenceDate);
     return dueDate
-      ? `Pagamento mensal • 5º dia útil (seg–sex) • previsão ${dateBR(dueDate)}`
-      : "Pagamento mensal • 5º dia útil (segunda a sexta)";
+      ? `Pagamento mensal • 5º dia útil (seg–sex, exceto feriados nacionais) • previsão ${dateBR(dueDate)}`
+      : "Pagamento mensal • 5º dia útil (seg–sex, exceto feriados nacionais)";
   }
 
   function paymentStatusText(summary) {
@@ -1749,7 +1749,7 @@
     const end = dom.filterEnd.value;
     let label = start || end ? `${start ? dateBR(start) : "início"} a ${end ? dateBR(end) : "hoje"}` : "Todos os lançamentos";
     const payGroupLabel = dom.filterPaySchedule.value === "fifthWeekday"
-      ? "Alice • 5º dia útil"
+      ? "Colaborador • 5º dia útil"
       : dom.filterPaySchedule.value === "all" ? "Todos os grupos" : "Recebem por horas trabalhadas";
     label += ` • ${payGroupLabel}`;
     if (dom.filterEmployee.value !== "all") label += ` • ${getEmployee(dom.filterEmployee.value)?.name || "Colaborador"}`;
@@ -2127,3 +2127,4 @@
     toastTimer = setTimeout(() => dom.toast.classList.remove("show"), 3000);
   }
 })();
+
