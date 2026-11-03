@@ -1568,12 +1568,12 @@
     }).join("") : '<div class="empty-mini">Nenhum colaborador cadastrado ainda.</div>';
   }
 
-  function getFilteredEntries(employeeFilter = dom.filterEmployee.value) {
+  function getFilteredEntries(employeeFilter = dom.filterEmployee.value, includeReportAbsences = false) {
     return state.entries.filter((entry) => {
       if (!employeeMatchesPayGroup(entry.employeeId)) return false;
       if (employeeFilter !== "all" && entry.employeeId !== employeeFilter) return false;
       if (dom.filterStatus.value === "absence" && !L.isAbsence(entry)) return false;
-      if (["paid", "pending"].includes(dom.filterStatus.value) && (L.isAbsence(entry) || entry.status !== dom.filterStatus.value)) return false;
+      if (["paid", "pending"].includes(dom.filterStatus.value) && !(includeReportAbsences && L.isAbsence(entry)) && (L.isAbsence(entry) || entry.status !== dom.filterStatus.value)) return false;
       const isCarryover = L.isBalanceCarryover(entry, dom.filterStart.value, activePeriod);
       const belongsToFollowingPeriod = entry.carryToNextPeriod === true || (entry.valueMode === "balance8h" && /-21$/.test(String(entry.date || "")));
       if (activePeriod === "close20" && belongsToFollowingPeriod) return false;
@@ -1796,7 +1796,7 @@
   function getReportData() {
     const selectedEmployee = dom.reportEmployeeSelect.value;
     if (!selectedEmployee) return { entries: [], advances: [] };
-    const entries = getFilteredEntries("all");
+    const entries = getFilteredEntries("all", true);
     const advances = getFilteredAdvances("all");
     if (selectedEmployee === "all") return { entries, advances };
     return {
