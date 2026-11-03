@@ -126,7 +126,21 @@ button { cursor: pointer; }
 
 .workspace-grid { display: grid; grid-template-columns: minmax(340px, .78fr) minmax(540px, 1.45fr); align-items: start; gap: 20px; }
 .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
-.entry-panel { position: sticky; top: 104px; padding: 23px; }
+.entry-panel {
+  position: sticky;
+  top: 104px;
+  max-height: max(280px, calc(100vh - 124px));
+  max-height: max(280px, calc(100dvh - 124px));
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #71839b #edf1f6;
+  padding: 23px;
+}
+.entry-panel::-webkit-scrollbar { width: 12px; }
+.entry-panel::-webkit-scrollbar-track { background: #edf1f6; border-radius: 12px; }
+.entry-panel::-webkit-scrollbar-thumb { background: #71839b; border: 3px solid #edf1f6; border-radius: 12px; }
+.entry-panel::-webkit-scrollbar-thumb:hover { background: #425b7b; }
 .records-panel { min-height: 630px; padding: 23px; }
 
 .btn { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; padding: 9px 14px; border: 1px solid transparent; border-radius: 10px; font-weight: 800; font-size: .82rem; transition: .15s ease; }
@@ -576,7 +590,7 @@ td { padding: 13px; font-size: .9rem; }
 @media (max-width: 1080px) {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .workspace-grid { grid-template-columns: 1fr; }
-  .entry-panel { position: static; }
+  .entry-panel { position: static; max-height: 75vh; max-height: 75dvh; }
   .filters { grid-template-columns: repeat(3, 1fr); }
   .clear-filter { grid-column: 3; }
 }
@@ -765,3 +779,4 @@ td { padding: 13px; font-size: .9rem; }
   .payslip.print-ultra-compact .signature-line { margin-top: 24px; }
   .payslip-header, .payslip-totals .payslip-net, .payslip-paid-box, .payslip-paid-box b { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
