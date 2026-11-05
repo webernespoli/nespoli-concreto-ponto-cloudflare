@@ -1992,7 +1992,9 @@
       const employee = getEmployee(employeeId);
       const companyKey = employeeCompanyKey(employee);
       const companyName = employeeCompanyName(employee);
-      const companyLogo = '<div class="payslip-logo"><img src="logo-nespoli-bi.svg" alt="Nespoli BI"></div>';
+      const companyLogo = companyKey === "concrete"
+        ? '<div class="payslip-logo"><img src="logo-nespoli-concreto.png" alt="Nespoli Concreto"></div>'
+        : '<div class="payslip-logo"><img src="logo-nespoli-bi.svg" alt="Nespoli BI"></div>';
       const pixKey = normalizeEmployeeProfile(employee).bank.pixKey;
       const schedule = paymentScheduleLabel(employee, items);
       const statusLabel = workItems.length
