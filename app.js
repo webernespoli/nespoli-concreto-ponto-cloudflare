@@ -1157,10 +1157,25 @@
       paidDate: !isAbsence && status === "paid" ? dom.paymentDate.value : "",
       updatedAt: new Date().toISOString()
     };
-    if (existing) Object.assign(existing, payload);
-    else state.entries.push({ id: uid(), ...payload, createdAt: new Date().toISOString() });
+    const savedEntry = existing || { id: uid(), createdAt: new Date().toISOString() };
+    Object.assign(savedEntry, payload);
+    if (!existing) state.entries.push(savedEntry);
     saveState();
     const wasEditing = Boolean(existing);
+
+    if (!getFilteredEntries().includes(savedEntry)) {
+      if (!employeeMatchesPayGroup(employee.id)) {
+        dom.filterPaySchedule.value = employee.paySchedule === "monthlyFifthWeekday" ? "fifthWeekday" : "hours";
+      }
+      renderMainEmployeeFilter(employee.id);
+      dom.filterStatus.value = "all";
+      if (!getFilteredEntries().includes(savedEntry)) {
+        activePeriod = "custom";
+        dom.filterStart.value = savedEntry.date;
+        dom.filterEnd.value = savedEntry.date;
+        updateActiveChips();
+      }
+    }
     resetEntryForm();
     renderAll();
     toast(wasEditing ? "Registro atualizado." : isAbsence ? "Falta registrada com sucesso." : isHalfDaily ? "Meia diária salva com sucesso." : isFullDaily ? "Diária salva com sucesso." : "Jornada salva com sucesso.");
