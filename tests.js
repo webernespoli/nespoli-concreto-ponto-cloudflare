@@ -75,7 +75,7 @@ assert.deepEqual(getClosePeriod("close7", new Date(2026, 8, 22)), { start: "2026
 assert.equal(getCurrentCloseType(new Date(2026, 9, 6)), "close7");
 assert.equal(getCurrentCloseType(new Date(2026, 9, 7)), "close7");
 assert.equal(getCurrentCloseType(new Date(2026, 9, 8)), "close20");
-assert.equal(getCurrentCloseType(new Date(2026, 9, 21)), "close20");
+assert.equal(getCurrentCloseType(new Date(2026, 9, 21)), "close7");
 assert.equal(getCurrentCloseType(new Date(2026, 9, 22)), "close7");
 assert.equal(isBalanceCarryover({ date: "2026-09-21", valueMode: "balance8h" }, "2026-09-22", "close7"), true);
 assert.equal(isBalanceCarryover({ date: "2026-09-21", valueMode: "worked" }, "2026-09-22", "close7"), false);
@@ -194,3 +194,6 @@ assert.equal(reportWeekends.reduce((sum,x) => sum + (x.finalValue || 0), 0), 60)
 assert.equal(includeReportWeekends([], "2026-11-07", "2026-11-08").length, 2);
 assert.equal(includeReportWeekends([], "", "").length, 0);
 assert.equal(includeReportWeekends([], "2026-11-07", "2026-11-08", [saturdayWork,sundayAbsence]).length, 0);
+
+assert.deepEqual(getClosePeriod("close7", new Date(2026, 10, 5)), {start:"2026-10-21",end:"2026-11-07"});
+assert.equal(isBalanceCarryover({date:"2026-10-20",valueMode:"balance8h",status:"paid"},"2026-10-21","close7"),false);

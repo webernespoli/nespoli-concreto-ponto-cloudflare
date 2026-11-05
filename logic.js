@@ -208,13 +208,16 @@
       return `${y}-${m}-${d}`;
     };
     if (type === "close7") {
-      const start = day >= 22 ? new Date(year, month, 22) : new Date(year, month - 1, 22);
-      const end = day >= 22 ? new Date(year, month + 1, 7) : new Date(year, month, 7);
+      const cycleStartsThisMonth = day >= (year === 2026 && month === 9 ? 21 : 22);
+      const start = new Date(year, cycleStartsThisMonth ? month : month - 1, 22);
+      if (toISO(start) === "2026-10-22") start.setDate(21);
+      const end = new Date(year, cycleStartsThisMonth ? month + 1 : month, 7);
       return { start: toISO(start), end: toISO(end) };
     }
     if (type === "close20") {
       const targetMonth = day < 8 ? month - 1 : month;
-      return { start: toISO(new Date(year, targetMonth, 8)), end: toISO(new Date(year, targetMonth, 21)) };
+      const start = toISO(new Date(year, targetMonth, 8));
+      return { start, end: start === "2026-10-08" ? "2026-10-20" : toISO(new Date(year, targetMonth, 21)) };
     }
     if (type === "month") {
       return { start: toISO(new Date(year, month, 1)), end: toISO(new Date(year, month + 1, 0)) };
@@ -224,13 +227,14 @@
 
   function getCurrentCloseType(baseDate = new Date()) {
     const day = baseDate.getDate();
-    return day <= 7 || day >= 22 ? "close7" : "close20";
+    const cycleStartDay = baseDate.getFullYear() === 2026 && baseDate.getMonth() === 9 ? 21 : 22;
+    return day <= 7 || day >= cycleStartDay ? "close7" : "close20";
   }
 
   function isBalanceCarryover(entry, periodStart, periodType) {
     if (periodType !== "close7" || entry?.valueMode !== "balance8h") return false;
     const startMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(periodStart || ""));
-    if (!startMatch || !/^\d{4}-\d{2}-\d{2}$/.test(String(entry?.date || ""))) return false;
+    if (!startMatch || startMatch[3] !== "22" || !/^\d{4}-\d{2}-\d{2}$/.test(String(entry?.date || ""))) return false;
     const previousDay = new Date(Date.UTC(Number(startMatch[1]), Number(startMatch[2]) - 1, Number(startMatch[3])));
     previousDay.setUTCDate(previousDay.getUTCDate() - 1);
     const previousISO = `${previousDay.getUTCFullYear()}-${String(previousDay.getUTCMonth() + 1).padStart(2, "0")}-${String(previousDay.getUTCDate()).padStart(2, "0")}`;

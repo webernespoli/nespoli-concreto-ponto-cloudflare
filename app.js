@@ -1782,9 +1782,11 @@
     dom.periodLabel.textContent = label;
     updateActivePaymentGroupButtons();
     const helpText = activePeriod === "close7"
-      ? "Novo ciclo: começa no dia 22 para não repetir a diária do dia 21, que já ficou no pagamento anterior."
+      ? start === "2026-10-21"
+        ? "Novo ciclo: começa em 21/10, após o pagamento de 20/10. O relatório inclui o saldo de horas pendente de 20/10."
+        : "Novo ciclo: começa no dia 22, após o pagamento do dia 21."
       : activePeriod === "close20"
-        ? "Ciclo de trabalho do dia 08 ao dia 21."
+        ? `Ciclo de trabalho de ${dateBR(start)} a ${dateBR(end)}.`
         : activePeriod === "custom"
           ? "Período escolhido manualmente nos filtros abaixo."
           : "";
