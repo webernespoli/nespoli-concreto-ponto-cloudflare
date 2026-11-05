@@ -1583,13 +1583,22 @@
     }).join("") : '<div class="empty-mini">Nenhum colaborador cadastrado ainda.</div>';
   }
 
-  function getFilteredEntries(employeeFilter = dom.filterEmployee.value, includeReportAbsences = false) {
+  function getFilteredEntries(employeeFilter = dom.filterEmployee.value, forReport = false) {
     return state.entries.filter((entry) => {
       if (!employeeMatchesPayGroup(entry.employeeId)) return false;
       if (employeeFilter !== "all" && entry.employeeId !== employeeFilter) return false;
       if (dom.filterStatus.value === "absence" && !L.isAbsence(entry)) return false;
-      if (["paid", "pending"].includes(dom.filterStatus.value) && !(includeReportAbsences && L.isAbsence(entry)) && (L.isAbsence(entry) || entry.status !== dom.filterStatus.value)) return false;
-      const isCarryover = L.isBalanceCarryover(entry, dom.filterStart.value, activePeriod);
+      if (["paid", "pending"].includes(dom.filterStatus.value) && !(forReport && L.isAbsence(entry)) && (L.isAbsence(entry) || entry.status !== dom.filterStatus.value)) return false;
+      const periodStart = dom.filterStart.value;
+      const isPendingDay20Balance = forReport
+        && /^\d{4}-\d{2}-21$/.test(periodStart)
+        && entry.date === periodStart.slice(0, -2) + "20"
+        && entry.status === "pending"
+        && !L.isAbsence(entry)
+        && entry.valueMode === "balance8h"
+        && getEmployee(entry.employeeId)?.paySchedule !== "monthlyFifthWeekday"
+        && calculateEntry(entry).balanceMinutes > 0;
+      const isCarryover = isPendingDay20Balance || L.isBalanceCarryover(entry, periodStart, activePeriod);
       const belongsToFollowingPeriod = entry.carryToNextPeriod === true || (entry.valueMode === "balance8h" && /-21$/.test(String(entry.date || "")));
       if (activePeriod === "close20" && belongsToFollowingPeriod) return false;
       if (dom.filterStart.value && entry.date < dom.filterStart.value && !isCarryover) return false;
@@ -1784,7 +1793,7 @@
   }
 
   function openReport() {
-    const entries = getFilteredEntries("all");
+    const entries = getFilteredEntries("all", true);
     const advances = getFilteredAdvances("all");
     const groups = groupForReport(entries, advances);
     const reportEmployees = new Map(state.employees.filter((employee) => employeeMatchesPayGroup(employee.id)).map((employee) => [employee.id, { name: employee.name, companyName: employeeCompanyName(employee) }]));
