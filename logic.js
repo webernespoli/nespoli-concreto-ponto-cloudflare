@@ -241,7 +241,8 @@
     return entry.date === previousISO;
   }
 
-  // Calendário do grupo: segunda a sexta, excluindo feriados nacionais fixos.
+  // Calendário do grupo: segunda a sábado, excluindo feriados nacionais fixos.
+  // Sábado conta como dia útil inteiro para o vencimento; a jornada é de meio período.
   // O vencimento é no mês seguinte ao mês trabalhado; não altera horas ou valores.
   function getFifthWeekdayPaymentDate(referenceDate) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(referenceDate || ""));
@@ -259,7 +260,7 @@
     while (weekdays < 5) {
       const day = date.getUTCDay();
       const monthDay = `${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
-      if (day >= 1 && day <= 5 && !nationalHolidays.has(monthDay)) weekdays += 1;
+      if (day >= 1 && day <= 6 && !nationalHolidays.has(monthDay)) weekdays += 1;
       if (weekdays < 5) date.setUTCDate(date.getUTCDate() + 1);
     }
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;

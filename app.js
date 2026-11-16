@@ -809,8 +809,8 @@
     const referenceDate = pendingDates[0] || allDates.at(-1) || "";
     const dueDate = L.getFifthWeekdayPaymentDate(referenceDate);
     return dueDate
-      ? `Pagamento mensal • 5º dia útil (seg–sex, exceto feriados nacionais) • previsão ${dateBR(dueDate)}`
-      : "Pagamento mensal • 5º dia útil (seg–sex, exceto feriados nacionais)";
+      ? `Pagamento mensal • 5º dia útil (seg–sáb, sábado meio período, exceto feriados nacionais) • previsão ${dateBR(dueDate)}`
+      : "Pagamento mensal • 5º dia útil (seg–sáb, sábado meio período, exceto feriados nacionais)";
   }
 
   function paymentStatusText(summary) {
