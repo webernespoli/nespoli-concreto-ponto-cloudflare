@@ -30,7 +30,21 @@
   let cloudTimer;
   let cloudWriting = false;
   let cloudWriteAgain = false;
-  let cloudRefreshPromise = null;
+  let syncedState = loadSyncedState();
+
+  function loadSyncedState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEY}_synced`));
+      return saved && Array.isArray(saved.entries) && Array.isArray(saved.employees) ? saved : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberSyncedState(snapshot) {
+    syncedState = structuredClone(snapshot);
+    localStorage.setItem(`${STORAGE_KEY}_synced`, JSON.stringify(syncedState));
+  }
 
   const dom = {
     saveStatus: $("#saveStatus"), periodLabel: $("#periodLabel"), periodHelp: $("#periodHelp"),
@@ -290,95 +304,68 @@
 
   async function fetchCloudState() {
     const response = await cloudRequest({ headers: { Accept: "application/json" } });
+    if (response.status === 401) throw new Error("Sua sessão expirou • entre novamente para sincronizar");
     if (!response.ok) throw new Error(`Falha ao consultar a nuvem (${response.status})`);
     return response.json();
   }
 
   async function initializeCloudSync() {
-    if (cloudRefreshPromise) return cloudRefreshPromise;
-    cloudRefreshPromise = (async () => {
-      try {
-        setSaveStatus("syncing", "Sincronizando…");
-        const cloud = await fetchCloudState();
-        cloudRevision = Number(cloud.revision) || 0;
-        cloudInitialized = true;
-        const cloudSourceVersion = Number(cloud.state?.version) || 0;
-        const cloudState = cloud.state && Array.isArray(cloud.state.employees) && Array.isArray(cloud.state.entries)
-          ? normalizeState(cloud.state)
-          : null;
-        const localTime = new Date(state.updatedAt || 0).getTime();
-        const cloudTime = new Date(cloudState?.updatedAt || 0).getTime();
-
-        if (cloudState && (!hasBusinessData(state) || cloudTime > localTime)) {
-          state = cloudState;
-          persistLocalState();
-          resetEntryForm();
-          renderAll();
-          updatePreview();
-        } else if (hasBusinessData(state) && (!cloudState || localTime > cloudTime)) {
-          await pushCloudState();
-          return;
-        }
-        if (cloudSourceVersion < 15 && hasBusinessData(state)) {
-          state.updatedAt = new Date().toISOString();
-          persistLocalState();
-          await pushCloudState();
-          return;
-        }
-        setSaveStatus("synced", "Dados salvos na nuvem");
-      } catch (error) {
-        console.warn("Sincronização indisponível", error);
-        cloudInitialized = false;
-        setSaveStatus("offline", "Sem conexão • toque para tentar");
-        if (navigator.onLine) scheduleCloudSave(15000);
-      } finally {
-        cloudRefreshPromise = null;
-      }
-    })();
-    return cloudRefreshPromise;
+    return pushCloudState();
   }
 
   async function pushCloudState() {
-    if (!cloudInitialized) return initializeCloudSync();
     if (cloudWriting) {
       cloudWriteAgain = true;
       return;
     }
     cloudWriting = true;
-    const snapshotUpdatedAt = state.updatedAt;
     try {
       setSaveStatus("syncing", "Salvo neste aparelho • sincronizando…");
-      const response = await cloudRequest({
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ state, baseRevision: cloudRevision })
-      });
-      const result = await response.json();
-      if (response.status === 409) {
-        cloudRevision = Number(result.revision) || 0;
-        const cloudState = result.state && Array.isArray(result.state.employees) && Array.isArray(result.state.entries)
-          ? normalizeState(result.state)
-          : null;
-        if (cloudState && new Date(cloudState.updatedAt || 0).getTime() > new Date(state.updatedAt || 0).getTime()) {
-          state = cloudState;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const cloud = await fetchCloudState();
+        const remote = cloud.state && Array.isArray(cloud.state.employees) && Array.isArray(cloud.state.entries)
+          ? normalizeState(cloud.state) : defaultState();
+        cloudRevision = Number(cloud.revision) || 0;
+        const merged = normalizeState(L.mergeConcurrentState(syncedState, state, remote));
+        const sameData = ["employees", "entries", "advances"].every((key) => JSON.stringify(merged[key]) === JSON.stringify(remote[key]));
+        if (sameData && remote.version >= 15) {
+          state = merged;
+          rememberSyncedState(remote);
           persistLocalState();
-          resetEntryForm();
           renderAll();
           updatePreview();
+          cloudInitialized = true;
           setSaveStatus("synced", "Dados salvos na nuvem");
-        } else {
-          cloudWriteAgain = true;
+          return;
         }
+        rememberSyncedState(remote);
+        merged.updatedAt = new Date().toISOString();
+        state = merged;
+        persistLocalState();
+        const sent = structuredClone(merged);
+        const response = await cloudRequest({
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ state: sent, baseRevision: cloudRevision })
+        });
+        if (response.status === 409) continue;
+        if (response.status === 401) throw new Error("Sua sessão expirou • entre novamente para sincronizar");
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || `Falha ao salvar (${response.status})`);
+        cloudRevision = Number(result.revision) || cloudRevision;
+        rememberSyncedState(sent);
+        cloudInitialized = true;
+        renderAll();
+        updatePreview();
+        if (JSON.stringify(state) !== JSON.stringify(sent)) cloudWriteAgain = true;
+        else setSaveStatus("synced", "Dados salvos na nuvem");
         return;
       }
-      if (!response.ok) throw new Error(result.error || `Falha ao salvar (${response.status})`);
-      cloudRevision = Number(result.revision) || cloudRevision;
-      if (state.updatedAt !== snapshotUpdatedAt) cloudWriteAgain = true;
-      else setSaveStatus("synced", "Dados salvos na nuvem");
+      throw new Error("Outro aparelho está salvando • nova tentativa em instantes");
     } catch (error) {
       console.warn("Não foi possível salvar na nuvem", error);
       cloudInitialized = false;
-      setSaveStatus("offline", "Sem conexão • toque para tentar");
+      setSaveStatus("offline", error.message || "Sem conexão • toque para tentar");
       if (navigator.onLine) scheduleCloudSave(15000);
     } finally {
       cloudWriting = false;
@@ -809,8 +796,8 @@
     const referenceDate = pendingDates[0] || allDates.at(-1) || "";
     const dueDate = L.getFifthWeekdayPaymentDate(referenceDate);
     return dueDate
-      ? `Pagamento mensal • 5º dia útil (seg–sáb, sábado meio período, exceto feriados nacionais) • previsão ${dateBR(dueDate)}`
-      : "Pagamento mensal • 5º dia útil (seg–sáb, sábado meio período, exceto feriados nacionais)";
+      ? `Pagamento mensal • 5º dia útil (seg–sex, exceto feriados nacionais) • previsão ${dateBR(dueDate)}`
+      : "Pagamento mensal • 5º dia útil (seg–sex, exceto feriados nacionais)";
   }
 
   function paymentStatusText(summary) {

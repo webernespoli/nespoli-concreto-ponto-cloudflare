@@ -1,0 +1,18 @@
+const assert = require('node:assert/strict');
+const { mergeConcurrentState } = require('./logic.js');
+const state = (advances) => ({ version: 15, employees: [], entries: [], advances });
+const base = state([{ id: 'old', value: 10, status: 'pending' }]);
+const a = state([...base.advances, { id: 'notebook-a', value: 20 }]);
+const b = state([...base.advances, { id: 'notebook-b', value: 30 }]);
+const merged = mergeConcurrentState(base, b, a);
+assert.equal(merged.advances.length, 3);
+assert.equal(merged.advances.reduce((total, row) => total + row.value, 0), 60);
+assert.equal(mergeConcurrentState(base, b, merged).advances.length, 3);
+assert.equal(mergeConcurrentState(base, state([]), a).advances.some(row => row.id === 'old'), false);
+assert.equal(mergeConcurrentState(base, base, state([])).advances.length, 0);
+const edited = mergeConcurrentState(base, state([{...base.advances[0], value: 15}]), state([{...base.advances[0], status: 'paid'}]));
+assert.equal(edited.advances[0].value, 15);
+assert.equal(edited.advances[0].status, 'paid');
+assert.equal(mergeConcurrentState(null, a, b).advances.length, 3);
+assert.deepEqual(base.advances, [{id:'old',value:10,status:'pending'}]);
+console.log('Sincronização: vales de dois notebooks, repetição, exclusões e edição simultânea passaram.');

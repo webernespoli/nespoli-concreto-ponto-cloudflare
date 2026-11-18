@@ -241,8 +241,7 @@
     return entry.date === previousISO;
   }
 
-  // Calendário do grupo: segunda a sábado, excluindo feriados nacionais fixos.
-  // Sábado conta como dia útil inteiro para o vencimento; a jornada é de meio período.
+  // Calendário do grupo: segunda a sexta, excluindo feriados nacionais fixos.
   // O vencimento é no mês seguinte ao mês trabalhado; não altera horas ou valores.
   function getFifthWeekdayPaymentDate(referenceDate) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(referenceDate || ""));
@@ -260,7 +259,7 @@
     while (weekdays < 5) {
       const day = date.getUTCDay();
       const monthDay = `${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
-      if (day >= 1 && day <= 6 && !nationalHolidays.has(monthDay)) weekdays += 1;
+      if (day >= 1 && day <= 5 && !nationalHolidays.has(monthDay)) weekdays += 1;
       if (weekdays < 5) date.setUTCDate(date.getUTCDate() + 1);
     }
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
@@ -281,12 +280,56 @@
     return rows.sort((a, b) => a.date.localeCompare(b.date));
   }
 
+  function mergeConcurrentState(base, local, remote) {
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const merged = { ...remote, version: Math.max(local.version || 0, remote.version || 0), updatedAt: local.updatedAt };
+    for (const collection of ["employees", "entries", "advances"]) {
+      const baseRows = new Map((base?.[collection] || []).map((row) => [row.id, row]));
+      const localRows = new Map((local[collection] || []).map((row) => [row.id, row]));
+      const remoteRows = new Map((remote[collection] || []).map((row) => [row.id, row]));
+      const result = [];
+      for (const id of new Set([...baseRows.keys(), ...localRows.keys(), ...remoteRows.keys()])) {
+        const previous = baseRows.get(id), ours = localRows.get(id), theirs = remoteRows.get(id);
+        if (!previous) {
+          // On the first connection, recover unsent records from either device.
+          const latest = !ours ? theirs : !theirs ? ours
+            : String(ours.updatedAt || "") > String(theirs.updatedAt || "") ? ours : theirs;
+          if (latest) result.push(latest);
+          continue;
+        }
+        if (same(ours, previous)) {
+          if (theirs) result.push(theirs);
+          continue;
+        }
+        if (!ours) {
+          // Keep a concurrently edited record when the other device deleted it.
+          if (theirs && !same(theirs, previous)) result.push(theirs);
+          continue;
+        }
+        if (!theirs) {
+          result.push(ours);
+          continue;
+        }
+        const row = { ...theirs };
+        for (const key of new Set([...Object.keys(previous), ...Object.keys(ours)])) {
+          if (!same(ours[key], previous[key])) {
+            if (Object.hasOwn(ours, key)) row[key] = ours[key];
+            else delete row[key];
+          }
+        }
+        result.push(row);
+      }
+      merged[collection] = result;
+    }
+    return merged;
+  }
+
   function matchesPaymentSchedule(paySchedule, group = "hours") {
     if (group === "all") return true;
     const isFifthWeekday = paySchedule === "monthlyFifthWeekday";
     return group === "fifthWeekday" ? isFifthWeekday : !isFifthWeekday;
   }
 
-  return { includeReportWeekends, calculateJourney, formatDuration, formatSignedDuration, resolveRateHistory, summarizePayments, summarizeOutstanding, summarizePaid, isAbsence, getClosePeriod, getCurrentCloseType, isBalanceCarryover, getFifthWeekdayPaymentDate, matchesPaymentSchedule, parseMoneyInput, roundMoney, timeToMinutes };
+  return { mergeConcurrentState, includeReportWeekends, calculateJourney, formatDuration, formatSignedDuration, resolveRateHistory, summarizePayments, summarizeOutstanding, summarizePaid, isAbsence, getClosePeriod, getCurrentCloseType, isBalanceCarryover, getFifthWeekdayPaymentDate, matchesPaymentSchedule, parseMoneyInput, roundMoney, timeToMinutes };
 });
 
