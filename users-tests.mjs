@@ -22,7 +22,7 @@ const api = (path, method = 'GET', body, cookie = '', extra = {}) => worker.fetc
   ...(body ? { body: JSON.stringify(body) } : {})
 }), env);
 const login = (username, password) => worker.fetch(new Request(`${origin}/login`, {
-  method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' },
+  method: 'POST', headers: { Origin: 'null', 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/x-www-form-urlencoded' },
   body: new URLSearchParams({ username, password })
 }), env);
 const cookieOf = response => response.headers.get('set-cookie').split(';')[0];
@@ -81,7 +81,9 @@ assert.equal((await api('/api/me', 'GET', null, previousCookie)).status, 401);
 assert.equal((await api('/api/me', 'GET', null, adminCookie)).status, 200);
 assert.equal((await login('weber', 'Strong-test-password-2026')).status, 401);
 assert.equal((await login('weber', 'New-strong-password-2026')).status, 303);
-assert.equal((await api('/logout', 'POST', null, adminCookie)).status, 303);
+assert.equal((await api('/logout', 'POST', null, adminCookie, { Origin: 'null', 'Sec-Fetch-Site': 'cross-site' })).status, 403);
+assert.equal((await api('/logout', 'POST', null, adminCookie, { Origin: 'https://other.example', 'Sec-Fetch-Site': 'same-origin' })).status, 403);
+assert.equal((await api('/logout', 'POST', null, adminCookie, { Origin: 'null', 'Sec-Fetch-Site': 'same-origin' })).status, 303);
 assert.equal((await api('/api/me', 'GET', null, adminCookie)).status, 401);
 assert.equal(sqlite.prepare('SELECT password_hash FROM access_users WHERE login = ?').get('weber').password_hash.includes('New-strong-password'), false);
 console.log('Usuários: cadastro, limite de três, login, permissões, autoria, conflitos, sessão, troca de senha e saída passaram.');

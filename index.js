@@ -200,7 +200,7 @@ function html(body, status = 200, extraHeaders = {}) {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "no-referrer",
+      "Referrer-Policy": "same-origin",
       "X-Robots-Tag": "noindex, nofollow",
       "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
       ...extraHeaders
@@ -352,16 +352,31 @@ function serveStatic(request, pathname) {
     "Content-Type": asset.contentType,
     "Cache-Control": cacheControl,
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
+    "Referrer-Policy": "same-origin",
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
   });
   return new Response(request.method === "HEAD" ? null : decodeBase64(asset.body), { status: 200, headers });
 }
 
+function isSameOriginSubmission(request, url) {
+  const origin = request.headers.get("Origin");
+  if (origin === url.origin) return true;
+  if (origin && origin !== "null") return false;
+  // Forms from older pages using no-referrer can send Origin: null.
+  const site = request.headers.get("Sec-Fetch-Site");
+  if (site === "same-origin") return true;
+  if (site) return false;
+  try {
+    return new URL(request.headers.get("Referer")).origin === url.origin;
+  } catch {
+    return false;
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && request.headers.get("Origin") !== url.origin) {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !isSameOriginSubmission(request, url)) {
       return json({ error: "Origem não autorizada." }, 403);
     }
     if (url.pathname === "/logo-nespoli-bi.svg" && ["GET", "HEAD"].includes(request.method)) return serveStatic(request, url.pathname);
