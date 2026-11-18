@@ -353,11 +353,14 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || `Falha ao salvar (${response.status})`);
         cloudRevision = Number(result.revision) || cloudRevision;
-        rememberSyncedState(sent);
+        const confirmed = result.state ? normalizeState(result.state) : sent;
+        state = normalizeState(L.mergeConcurrentState(sent, state, confirmed));
+        rememberSyncedState(confirmed);
+        persistLocalState();
         cloudInitialized = true;
         renderAll();
         updatePreview();
-        if (JSON.stringify(state) !== JSON.stringify(sent)) cloudWriteAgain = true;
+        if (JSON.stringify(state) !== JSON.stringify(confirmed)) cloudWriteAgain = true;
         else setSaveStatus("synced", "Dados salvos na nuvem");
         return;
       }
@@ -1077,7 +1080,7 @@
     dom.advancesList.innerHTML = invalidPeriod
       ? '<div class="advance-empty">A data inicial precisa ser anterior à data final.</div>'
       : advances.length ? advances.map((advance) => `<div class="advance-item${advance.id === lastSavedAdvanceId ? " newly-saved" : ""}" data-advance-id="${advance.id}">
-      <div class="advance-info"><strong>${escapeHTML(displayEmployeeName(advance.employeeId, advance))} • ${dateBR(advance.date)}</strong><small>${escapeHTML(advance.note || "Vale/adiantamento")}</small><span class="badge ${advance.status === "paid" ? "paid" : "pending"}">${advance.status === "paid" ? `Pago/descontado${advance.paidDate ? ` em ${dateBR(advance.paidDate)}` : ""}` : "Não pago"}</span></div>
+      <div class="advance-info"><strong>${escapeHTML(displayEmployeeName(advance.employeeId, advance))} • ${dateBR(advance.date)}</strong><small>${escapeHTML(advance.note || "Vale/adiantamento")}</small>${advance.createdBy?.name ? `<small>Lançado por ${escapeHTML(advance.createdBy.name)}</small>` : ""}<span class="badge ${advance.status === "paid" ? "paid" : "pending"}">${advance.status === "paid" ? `Pago/descontado${advance.paidDate ? ` em ${dateBR(advance.paidDate)}` : ""}` : "Não pago"}</span></div>
       <div class="advance-amount">− ${currency.format(advance.value)}</div>
       <div class="advance-actions"><button class="mini-btn ${advance.status === "paid" ? "" : "payment-action"}" data-advance-action="toggle" data-id="${advance.id}" type="button">${advance.status === "paid" ? "Marcar não pago" : "Marcar pago"}</button><button class="mini-btn" data-advance-action="edit" data-id="${advance.id}" type="button">Editar</button><button class="mini-btn delete" data-advance-action="delete" data-id="${advance.id}" type="button">Excluir</button></div>
     </div>`).join("") : '<div class="advance-empty">Nenhum vale encontrado com estes filtros.</div>';
@@ -1723,7 +1726,7 @@
     const manual = calc.manualValue !== null ? `<span class="manual-tag" title="${escapeHTML(entry.manualReason)}">Manual: ${escapeHTML(entry.manualReason || "ajuste")}</span>` : "";
     const balance = entry.valueMode === "balance8h" ? `<span class="manual-tag">Saldo de 8h: ${L.formatSignedDuration(calc.balanceMinutes)}</span>` : "";
     return `<tr>
-      <td><strong>${dateBR(entry.date)}</strong></td><td>${journey}</td><td>${interval}</td><td>${hours}</td>
+      <td title="${escapeHTML(entry.createdBy?.name ? `Lançado por ${entry.createdBy.name}` : "")}"><strong>${dateBR(entry.date)}</strong></td><td>${journey}</td><td>${interval}</td><td>${hours}</td>
       <td>${escapeHTML(paymentBaseLabel(calc))}<span class="rate-per-hour">${currency.format(calc.hourlyRate)}/h</span></td><td class="money ${calc.finalValue < 0 ? "negative-text" : ""}">${currency.format(calc.finalValue)}${balance}${manual}</td>
       <td><button class="badge ${entry.status}" data-action="toggle" data-id="${entry.id}" type="button">${entry.status === "paid" ? "Pago" : "Não pago"}</button>${entry.status === "paid" ? `<span class="payment-date">${entry.paidDate ? dateBR(entry.paidDate) : "data não informada"}</span>` : ""}</td>
       <td class="notes-cell" title="${escapeHTML(entry.notes)}">${escapeHTML(entry.notes || "—")}</td>

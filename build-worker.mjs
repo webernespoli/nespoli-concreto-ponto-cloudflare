@@ -7,6 +7,7 @@ const files = [
   ["/styles.css", "styles.css"],
   ["/logic.js", "logic.js"],
   ["/app.js", "app.js"],
+  ["/users.js", "users.js"],
   ["/logo-nespoli-concreto.png", "logo-nespoli-concreto.png"],
   ["/logo-nespoli-bi.svg", "logo-nespoli-bi.svg"]
 ];
@@ -30,7 +31,8 @@ for (const [route, file] of files) {
 const template = await readFile(new URL("worker.js", root), "utf8");
 const marker = "/*__STATIC_FILES__*/ {}";
 if (!template.includes(marker)) throw new Error("Marcador de arquivos estáticos não encontrado.");
-const output = template.replace(marker, JSON.stringify(staticFiles));
+const authCode = await readFile(new URL("auth-server.js", root), "utf8");
+const output = template.replace("/*__AUTH_CODE__*/", () => authCode).replace(marker, () => JSON.stringify(staticFiles));
 const projectRoot = resolve(new URL(root).pathname);
 const target = resolve(projectRoot, "index.js");
 const deployTarget = resolve(projectRoot, "dist/server/index.js");
@@ -44,3 +46,4 @@ if (process.env.APP_PASSWORD) {
   );
 }
 console.log(`Worker gerado com ${files.length} arquivos.`);
+

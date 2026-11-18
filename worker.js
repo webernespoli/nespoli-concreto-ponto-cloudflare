@@ -3,6 +3,7 @@ const MAX_BODY_BYTES = 1_000_000;
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const STATIC_FILES = /*__STATIC_FILES__*/ {};
 const textEncoder = new TextEncoder();
+/*__AUTH_CODE__*/
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -28,11 +29,11 @@ function html(body, status = 200, extraHeaders = {}) {
   });
 }
 
-function loginPage(message = "") {
+function loginPage(message = "", individual = false) {
   const warning = message ? `<p class="error" role="alert">${message}</p>` : "";
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acesso privado • Nespoli BI</title><style>
   :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#102038;background:#eef1f5}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at top,#e8f1fb 0,#eef1f5 38%)}main{width:min(430px,100%);padding:30px;border:1px solid #d8dee8;border-radius:20px;background:#fff;box-shadow:0 20px 60px rgba(16,32,56,.14)}.brand{display:flex;align-items:center;gap:12px;margin-bottom:25px}.mark{display:grid;place-items:center;width:112px;height:62px;padding:5px;border:1px solid #d8dee8;border-radius:12px;background:#fff;box-shadow:0 5px 18px rgba(7,54,107,.12)}.mark img{width:100%;height:100%;object-fit:contain}.eyebrow{margin:0;color:#07366b;font-size:12px;font-weight:900;letter-spacing:.13em}.brand strong{font-size:17px}h1{margin:0 0 8px;font-size:28px}p{margin:0 0 20px;color:#667185;line-height:1.5}label{display:block;margin-bottom:7px;font-weight:800}input{width:100%;min-height:50px;padding:10px 13px;border:1px solid #bfc9d8;border-radius:10px;font:inherit}input:focus{outline:3px solid rgba(255,210,41,.35);border-color:#c99f00}button{width:100%;min-height:50px;margin-top:14px;border:0;border-radius:10px;background:#ffd229;color:#161616;font:inherit;font-weight:900;cursor:pointer}.error{margin:0 0 16px;padding:11px 13px;border-radius:9px;background:#fff0ec;color:#a33a18;font-weight:700}.privacy{margin:18px 0 0;font-size:12px;text-align:center}
-  </style></head><body><main><div class="brand"><div class="mark"><img src="/logo-nespoli-bi.svg" alt="Nespoli BI"></div><div><p class="eyebrow">NESPOLI BI</p><strong>Gestão de ponto e pagamentos</strong></div></div><h1>Acesso privado</h1><p>Digite a senha definida na implantação da Cloudflare.</p>${warning}<form method="post" action="/login"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Entrar</button></form><p class="privacy">Dados protegidos e não indexados por buscadores.</p></main></body></html>`;
+  </style></head><body><main><div class="brand"><div class="mark"><img src="/logo-nespoli-bi.svg" alt="Nespoli BI"></div><div><p class="eyebrow">NESPOLI BI</p><strong>Gestão de ponto e pagamentos</strong></div></div><h1>Acesso privado</h1><p>${individual ? "Entre com seu usuário e senha." : "Entre com a senha atual e cadastre o primeiro administrador em Usuários."}</p>${warning}<form method="post" action="/login">${individual ? '<label for="username">Usuário</label><input id="username" name="username" autocomplete="username" maxlength="40" required>' : ""}<label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Entrar</button></form><p class="privacy">Dados protegidos e não indexados por buscadores.</p></main></body></html>`;
 }
 
 function secureEqual(left, right) {
@@ -108,7 +109,7 @@ async function readState(db) {
   }
 }
 
-async function writeState(request, db) {
+async function writeState(request, db, actor = null) {
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > MAX_BODY_BYTES) return json({ error: "Backup muito grande." }, 413);
 
@@ -122,6 +123,12 @@ async function writeState(request, db) {
   const baseRevision = Number(body?.baseRevision);
   if (!nextState || !Array.isArray(nextState.employees) || !Array.isArray(nextState.entries) || !Array.isArray(nextState.advances)) {
     return json({ error: "Estrutura de dados inválida." }, 400);
+  }
+  if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) return json({ error: "Revisão inválida." }, 400);
+  if (actor) {
+    const previous = await readState(db);
+    if (previous.revision !== baseRevision) return json(previous, 409);
+    stampRecordAuthors(nextState, previous.state, actor);
   }
   const payload = JSON.stringify(nextState);
   if (new TextEncoder().encode(payload).byteLength > MAX_BODY_BYTES) return json({ error: "Backup muito grande." }, 413);
@@ -139,14 +146,14 @@ async function writeState(request, db) {
   `).bind(STATE_ID, payload, updatedAt, baseRevision).first();
 
   if (!saved) return json(await readState(db), 409);
-  return json({ ok: true, revision: Number(saved.revision), updatedAt: saved.updated_at });
+  return json({ ok: true, revision: Number(saved.revision), updatedAt: saved.updated_at, ...(actor ? { state: nextState } : {}) });
 }
 
-async function handleApi(request, env) {
+async function handleApi(request, env, actor = null) {
   if (!env.DB) return json({ error: "Armazenamento ainda não configurado." }, 503);
   await ensureSchema(env.DB);
   if (request.method === "GET") return json(await readState(env.DB));
-  if (request.method === "PUT") return writeState(request, env.DB);
+  if (request.method === "PUT") return writeState(request, env.DB, actor);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { Allow: "GET, PUT, OPTIONS" } });
   return json({ error: "Método não permitido." }, 405);
 }
@@ -175,20 +182,39 @@ function serveStatic(request, pathname) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/login") return handleLogin(request, env);
-    if (url.pathname === "/logo-nespoli-bi.svg" && (request.method === "GET" || request.method === "HEAD")) return serveStatic(request, url.pathname);
-    if (url.pathname === "/logout" && request.method === "POST") {
-      return new Response(null, { status: 303, headers: { Location: "/login", "Set-Cookie": "nespoli_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict", "Cache-Control": "no-store" } });
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && request.headers.get("Origin") !== url.origin) {
+      return json({ error: "Origem não autorizada." }, 403);
     }
+    if (url.pathname === "/logo-nespoli-bi.svg" && ["GET", "HEAD"].includes(request.method)) return serveStatic(request, url.pathname);
     if (!env.APP_PASSWORD) return html(loginPage("A senha do aplicativo ainda não foi configurada na Cloudflare."), 503);
-    if (!await hasValidSession(request, env.APP_PASSWORD)) {
-      if (url.pathname === "/api/state") return json({ error: "Acesso não autorizado." }, 401);
-      return new Response(null, { status: 303, headers: { Location: "/login", "Cache-Control": "no-store" } });
+    if (!env.DB) return json({ error: "Armazenamento ainda não configurado." }, 503);
+    try {
+      await ensureAuthSchema(env.DB);
+      if (url.pathname === "/login") return individualLogin(request, env);
+      if (url.pathname === "/logout" && request.method === "POST") {
+        const token = getCookie(request, sessionCookieName);
+        if (token) await env.DB.prepare("DELETE FROM access_sessions WHERE token_hash = ?").bind(await tokenHash(token)).run();
+        const headers = new Headers({ Location: "/login", "Cache-Control": "no-store" });
+        headers.append("Set-Cookie", `${sessionCookieName}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`);
+        headers.append("Set-Cookie", "nespoli_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict");
+        return new Response(null, { status: 303, headers });
+      }
+      const actor = await currentUser(request, env);
+      if (!actor) {
+        if (url.pathname.startsWith("/api/")) return json({ error: "Sua sessão expirou. Entre novamente." }, 401);
+        return new Response(null, { status: 303, headers: { Location: "/login", "Cache-Control": "no-store" } });
+      }
+      if (url.pathname === "/api/me" && request.method === "GET") return json({ user: actor, needsSetup: actor.role === "setup" });
+      if (url.pathname === "/api/users") return manageUsers(request, env, actor);
+      if (url.pathname === "/api/state") return handleApi(request, env, actor);
+      if (["GET", "HEAD"].includes(request.method)) return serveStatic(request, url.pathname);
+      return json({ error: "Método não permitido." }, 405);
+    } catch (error) {
+      console.error("Falha no atendimento", error);
+      return json({ error: "Não foi possível concluir. Tente novamente." }, 500);
     }
-    if (url.pathname === "/api/state") return handleApi(request, env);
-    if (request.method === "GET" || request.method === "HEAD") return serveStatic(request, url.pathname);
-    return new Response("Método não permitido.", { status: 405 });
   }
 };
 
 export { ensureSchema, handleApi, readState, serveStatic, writeState };
+

@@ -62,47 +62,8 @@ const conflictResponse = await worker.handleApi(new Request("http://local/api/st
 assert.equal(conflictResponse.status, 409);
 assert.equal((await conflictResponse.json()).revision, 1);
 
-const loginPageResponse = await builtWorker.default.fetch(new Request("http://local/login"), env);
-assert.equal(loginPageResponse.status, 200);
-assert.match(await loginPageResponse.text(), /Acesso privado/);
-
-const unauthorizedApiResponse = await builtWorker.default.fetch(new Request("http://local/api/state"), env);
-assert.equal(unauthorizedApiResponse.status, 401);
-
-const wrongLoginResponse = await builtWorker.default.fetch(new Request("http://local/login", {
-  method: "POST",
-  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({ password: "senha-incorreta" })
-}), env);
-assert.equal(wrongLoginResponse.status, 401);
-
-const loginResponse = await builtWorker.default.fetch(new Request("http://local/login", {
-  method: "POST",
-  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({ password: env.APP_PASSWORD })
-}), env);
-assert.equal(loginResponse.status, 303);
-assert.equal(loginResponse.headers.get("location"), "/");
-const sessionCookie = loginResponse.headers.get("set-cookie").split(";")[0];
-
-const pageResponse = await builtWorker.default.fetch(new Request("http://local/", {
-  headers: { Cookie: sessionCookie }
-}), env);
-assert.equal(pageResponse.status, 200);
-assert.match(pageResponse.headers.get("content-type"), /text\/html/);
-assert.match(await pageResponse.text(), /Nespoli Concreto/);
-
-const authorizedApiResponse = await builtWorker.default.fetch(new Request("http://local/api/state", {
-  headers: { Cookie: sessionCookie }
-}), env);
-assert.equal(authorizedApiResponse.status, 200);
-assert.equal((await authorizedApiResponse.json()).revision, 1);
-
-const logoutResponse = await builtWorker.default.fetch(new Request("http://local/logout", {
-  method: "POST",
-  headers: { Cookie: sessionCookie }
-}), env);
-assert.equal(logoutResponse.status, 303);
-assert.match(logoutResponse.headers.get("set-cookie"), /Max-Age=0/);
-
+const staticPage = builtWorker.serveStatic(new Request("http://local/"), "/");
+assert.equal(staticPage.status, 200);
+assert.match(await staticPage.text(), /usersDialog/);
+await import("./users-tests.mjs");
 console.log("Todos os testes de sincronização e acesso privado passaram.");

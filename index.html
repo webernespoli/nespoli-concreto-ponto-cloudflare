@@ -19,6 +19,8 @@
       </div>
     </div>
     <div class="top-actions">
+      <span id="currentUserName" class="user-identity" aria-live="polite"></span>
+      <button class="btn btn-ghost" id="usersBtn" type="button" hidden>Usuários</button>
       <button class="save-status syncing" id="saveStatus" type="button" disabled title="Conectando à nuvem"><span class="status-dot"></span> Conectando à nuvem…</button>
       <button class="btn btn-ghost" id="backupBtn" type="button">Backup / Transferir</button>
       <button class="btn btn-ghost" id="advancesBtn" type="button">Vales</button>
@@ -451,7 +453,7 @@
             <label for="employeePaySchedule">Grupo de pagamento</label>
             <select id="employeePaySchedule">
               <option value="period">Recebe pelas horas trabalhadas — no fechamento</option>
-              <option value="monthlyFifthWeekday">Recebe no 5º dia útil — seg–sáb, sábado meio período, exceto feriados nacionais</option>
+              <option value="monthlyFifthWeekday">Recebe no 5º dia útil — seg–sex, exceto feriados nacionais</option>
             </select>
             <small>Escolha esta opção somente para o colaborador que recebe no 5º dia útil.</small>
           </div>
@@ -655,10 +657,43 @@
     </form>
   </dialog>
 
+  <dialog id="usersDialog" class="dialog users-dialog" aria-labelledby="usersTitle">
+    <div class="dialog-header">
+      <div><p class="eyebrow accent">ACESSOS DO SISTEMA</p><h2 id="usersTitle">Usuários</h2></div>
+      <button class="close-btn" data-close="usersDialog" type="button" aria-label="Fechar">×</button>
+    </div>
+    <div class="users-content">
+      <p>Cada pessoa usa seu próprio login em qualquer notebook. O administrador gerencia os acessos. O operador consulta e lança os dados do sistema.</p>
+      <div class="users-tabs" role="tablist" aria-label="Cadastro de usuários">
+        <button id="userRegistrationTab" type="button" role="tab" data-users-tab="registration" aria-controls="userRegistration" aria-selected="true">Cadastrar / editar</button>
+        <button id="userDirectoryTab" type="button" role="tab" data-users-tab="directory" aria-controls="userDirectory" aria-selected="false">Usuários cadastrados</button>
+      </div>
+      <p id="usersMessage" role="status" aria-live="polite"></p>
+      <section id="userRegistration" role="tabpanel" aria-labelledby="userRegistrationTab">
+        <form id="userForm">
+          <input id="userId" type="hidden"><input id="userRevision" type="hidden">
+          <div class="field"><label for="userName">Nome da pessoa</label><input id="userName" maxlength="100" autocomplete="name" required></div>
+          <div class="field"><label for="userLogin">Login</label><input id="userLogin" minlength="3" maxlength="40" pattern="[a-zA-Z0-9._\-]{3,40}" autocomplete="off" required><small>Letras sem acento, números, ponto ou traço.</small></div>
+          <div class="field"><label for="userRole">Perfil de acesso</label><select id="userRole"><option value="operator">Operador</option><option value="admin">Administrador</option></select></div>
+          <div class="field"><label for="userPassword">Senha</label><input id="userPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" required><small id="userPasswordHelp"></small></div>
+          <div class="field"><label for="userPasswordConfirm">Repita a senha</label><input id="userPasswordConfirm" type="password" maxlength="128" autocomplete="new-password"></div>
+          <div class="field" id="setupPasswordField" hidden><label for="setupPassword">Confirme a senha atual do sistema</label><input id="setupPassword" type="password" autocomplete="current-password"><small>Confirmação para criar o primeiro administrador.</small></div>
+          <label id="userActiveField" hidden><input id="userActive" type="checkbox" checked> Acesso ativo</label>
+          <div class="form-actions"><button id="saveUserBtn" class="btn btn-primary" type="submit">Cadastrar usuário</button></div>
+        </form>
+      </section>
+      <section id="userDirectory" role="tabpanel" aria-labelledby="userDirectoryTab" hidden>
+        <p id="usersCount"></p><div id="usersList"></div>
+        <button id="newUserBtn" class="btn btn-secondary" type="button">Novo cadastro</button>
+      </section>
+    </div>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="logic.js?v=24"></script>
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
+  <script src="users.js?v=1"></script>
 </body>
 </html>
 
