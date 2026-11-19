@@ -24,3 +24,29 @@ assert.equal(mergeConcurrentState(fourDates, fourDates, state([])).advances.leng
 assert.equal(mergeConcurrentState(fourDates, state([]), fourDates).advances.length, 4);
 assert.equal(mergeConcurrentState(fourDates, state([]), state([])).advances.length, 4);
 console.log('Regressão de 09, 10, 11 e 13/11: lista incompleta não exclui vales conhecidos.');
+
+for (const [collection, deletionKey] of [["employees", "deletedEmployees"], ["entries", "deletedEntries"]]) {
+  const original = { ...state([]), [collection]: [{ id: 'keep', name: 'Original' }] };
+  const incomplete = state([]);
+  assert.equal(mergeConcurrentState(original, incomplete, original)[collection].length, 1);
+  assert.equal(mergeConcurrentState(original, original, incomplete)[collection].length, 1);
+  assert.equal(mergeConcurrentState(original, incomplete, incomplete)[collection].length, 1);
+  const deleted = { ...incomplete, [deletionKey]: ['keep'] };
+  assert.equal(mergeConcurrentState(original, deleted, original)[collection].length, 0);
+  assert.equal(mergeConcurrentState(original, original, deleted)[collection].length, 0);
+  assert.equal(mergeConcurrentState(deleted, original, incomplete)[collection].length, 0);
+}
+console.log('Jornadas, faltas e colaboradores: cópias incompletas preservadas; exclusões explícitas propagadas.');
+
+const deletedEmployee = { ...state([]), deletedEmployees: ['employee'] };
+const staleEmployee = { ...state([{id:'new-advance',employeeId:'employee'}]), employees:[{id:'employee'}], entries:[{id:'new-entry',employeeId:'employee'}] };
+const noOrphans = mergeConcurrentState(null, staleEmployee, deletedEmployee);
+assert.equal(noOrphans.employees.length, 0);
+assert.equal(noOrphans.entries.length, 0);
+assert.equal(noOrphans.advances.length, 0);
+const currentBackup = state([{id:'original',value:10},{id:'another-notebook',value:20}]);
+const importedBackup = state([{id:'original',value:15}]);
+const restored = mergeConcurrentState(currentBackup, importedBackup, currentBackup);
+assert.equal(restored.advances.length, 2);
+assert.equal(restored.advances.find(row => row.id === 'original').value, 15);
+console.log('Backup mesclado preserva lançamentos ausentes; exclusão de colaborador não deixa registros órfãos.');

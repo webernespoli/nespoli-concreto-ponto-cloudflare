@@ -140,13 +140,15 @@ async function writeState(request, db, actor = null) {
   if (actor) {
     const previous = await readState(db);
     if (previous.revision !== baseRevision) return json(previous, 409);
-    const deleted = new Set([...(previous.state?.deletedAdvances || []), ...(Array.isArray(nextState.deletedAdvances) ? nextState.deletedAdvances : [])]
-      .filter((id) => typeof id === "string"));
-    const advances = new Map((previous.state?.advances || []).map((advance) => [advance.id, advance]));
-    for (const advance of nextState.advances) advances.set(advance.id, advance);
-    for (const id of deleted) advances.delete(id);
-    nextState.advances = [...advances.values()];
-    nextState.deletedAdvances = [...deleted];
+    for (const [collection, deletionKey] of [["employees", "deletedEmployees"], ["entries", "deletedEntries"], ["advances", "deletedAdvances"]]) {
+      const deleted = new Set([...(previous.state?.[deletionKey] || []), ...(Array.isArray(nextState[deletionKey]) ? nextState[deletionKey] : [])]
+        .filter((id) => typeof id === "string"));
+      const rows = new Map((previous.state?.[collection] || []).map((row) => [row.id, row]));
+      for (const row of nextState[collection]) rows.set(row.id, row);
+      for (const id of deleted) rows.delete(id);
+      nextState[collection] = [...rows.values()].filter((row) => collection === "employees" || !nextState.deletedEmployees.includes(row.employeeId));
+      nextState[deletionKey] = [...deleted];
+    }
     stampRecordAuthors(nextState, previous.state, actor);
   }
   const payload = JSON.stringify(nextState);

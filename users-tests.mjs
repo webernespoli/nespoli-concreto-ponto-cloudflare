@@ -85,6 +85,20 @@ assert.equal(cloud.state.advances.length, 0);
 assert.equal((await api('/api/state', 'PUT', { state, baseRevision: cloud.revision }, operatorCookie)).status, 200);
 cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
 assert.equal(cloud.state.advances.length, 0);
+for (const [collection, deletionKey] of [["employees", "deletedEmployees"], ["entries", "deletedEntries"]]) {
+  const original = { ...cloud.state, [collection]: [{ id: `test-${collection}`, name: 'Mantido' }] };
+  assert.equal((await api('/api/state', 'PUT', { state: original, baseRevision: cloud.revision }, operatorCookie)).status, 200);
+  cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+  assert.equal((await api('/api/state', 'PUT', { state: { ...cloud.state, [collection]: [] }, baseRevision: cloud.revision }, operatorCookie)).status, 200);
+  cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+  assert.equal(cloud.state[collection].length, 1);
+  assert.equal((await api('/api/state', 'PUT', { state: { ...cloud.state, [collection]: [], [deletionKey]: [`test-${collection}`] }, baseRevision: cloud.revision }, operatorCookie)).status, 200);
+  cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+  assert.equal(cloud.state[collection].length, 0);
+  assert.equal((await api('/api/state', 'PUT', { state: original, baseRevision: cloud.revision }, operatorCookie)).status, 200);
+  cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+  assert.equal(cloud.state[collection].length, 0);
+}
 response = await api('/api/users', 'PATCH', { ...operator, active: false }, adminCookie);
 assert.equal(response.status, 200);
 assert.equal((await api('/api/me', 'GET', null, operatorCookie)).status, 401);

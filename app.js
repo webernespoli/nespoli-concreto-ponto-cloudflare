@@ -25,6 +25,7 @@
   let activeBulkPaymentAdvanceIds = [];
   let lastSavedAdvanceId = "";
   let toastTimer;
+  let localStorageAvailable = true;
   let cloudRevision = 0;
   let cloudInitialized = false;
   let cloudTimer;
@@ -43,7 +44,11 @@
 
   function rememberSyncedState(snapshot) {
     syncedState = structuredClone(snapshot);
-    localStorage.setItem(`${STORAGE_KEY}_synced`, JSON.stringify(syncedState));
+    try {
+      localStorage.setItem(`${STORAGE_KEY}_synced`, JSON.stringify(syncedState));
+    } catch (error) {
+      console.warn("Cópia da sincronização indisponível neste aparelho", error);
+    }
   }
 
   const dom = {
@@ -253,6 +258,16 @@
   }
 
   function persistLocalState() {
+    try {
+      persistLocalStateOrThrow();
+      localStorageAvailable = true;
+    } catch (error) {
+      localStorageAvailable = false;
+      console.warn("Não foi possível salvar neste aparelho", error);
+    }
+  }
+
+  function persistLocalStateOrThrow() {
     const serialized = JSON.stringify(state);
     const previous = localStorage.getItem(STORAGE_KEY);
     if (previous && previous !== serialized) {
@@ -281,8 +296,15 @@
   }
 
   function setSaveStatus(kind, text) {
+    if (!localStorageAvailable) {
+      text = kind === "synced" ? "Salvo na nuvem • cópia local indisponível"
+        : kind === "syncing" ? "Salvando na nuvem • cópia local indisponível"
+        : "Salvamento pendente • mantenha esta página aberta e tente sincronizar";
+    }
     dom.saveStatus.className = `save-status ${kind}`;
-    dom.saveStatus.innerHTML = `<span class="status-dot"></span> ${text}`;
+    const dot = document.createElement("span");
+    dot.className = "status-dot";
+    dom.saveStatus.replaceChildren(dot, document.createTextNode(` ${text}`));
     dom.saveStatus.disabled = kind === "syncing";
     dom.saveStatus.title = kind === "offline"
       ? "Toque para tentar conectar novamente"
@@ -347,7 +369,7 @@
           ? normalizeState(cloud.state) : defaultState();
         cloudRevision = Number(cloud.revision) || 0;
         const merged = normalizeState(L.mergeConcurrentState(syncedState, state, remote));
-        const sameData = ["employees", "entries", "advances", "deletedAdvances"].every((key) => JSON.stringify(merged[key]) === JSON.stringify(remote[key]));
+        const sameData = ["employees", "entries", "advances", "deletedEmployees", "deletedEntries", "deletedAdvances"].every((key) => JSON.stringify(merged[key]) === JSON.stringify(remote[key]));
         if (sameData && remote.version >= 15) {
           state = merged;
           rememberSyncedState(remote);
@@ -650,6 +672,8 @@
       ? `Excluir ${employee.name}, ${linked} registro(s) de jornada/falta e ${linkedAdvances} vale(s)? Esta ação não pode ser desfeita.`
       : `Excluir o colaborador ${employee.name}?`;
     if (!confirm(message)) return;
+    state.deletedEmployees = [...new Set([...(state.deletedEmployees || []), employee.id])];
+    state.deletedEntries = [...new Set([...(state.deletedEntries || []), ...state.entries.filter((entry) => entry.employeeId === employee.id).map((entry) => entry.id)])];
     state.employees = state.employees.filter((item) => item.id !== employee.id);
     state.entries = state.entries.filter((entry) => entry.employeeId !== employee.id);
     state.deletedAdvances = [...new Set([...(state.deletedAdvances || []), ...state.advances.filter((advance) => advance.employeeId === employee.id).map((advance) => advance.id)])];
@@ -1411,6 +1435,7 @@
     }
     if (button.dataset.action === "delete") {
       if (!confirm(`Excluir ${L.isAbsence(entry) ? "a falta" : "a jornada"} de ${dateBR(entry.date)}?`)) return;
+      state.deletedEntries = [...new Set([...(state.deletedEntries || []), entry.id])];
       state.entries = state.entries.filter((item) => item.id !== entry.id);
       saveState();
       renderDashboard();
@@ -2126,8 +2151,9 @@
   function restoreParsedBackup(parsed) {
     const data = parsed?.data || parsed;
     if (!Array.isArray(data?.employees) || !Array.isArray(data?.entries)) throw new Error("Formato inválido");
-    if (!confirm(`Restaurar este backup com ${data.employees.length} colaborador(es), ${data.entries.length} registro(s) de jornada/falta e ${(data.advances || []).length} vale(s)? Os dados atuais serão substituídos.`)) return false;
-    state = normalizeState({ version: Number(data.version) || 0, employees: data.employees, entries: data.entries, advances: data.advances || [], updatedAt: new Date().toISOString() });
+    if (!confirm(`Restaurar este backup com ${data.employees.length} colaborador(es), ${data.entries.length} registro(s) de jornada/falta e ${(data.advances || []).length} vale(s)? Os dados serão incorporados aos atuais, preservando registros de outros notebooks e exclusões já confirmadas.`)) return false;
+    const imported = normalizeState({ version: Number(data.version) || 0, employees: data.employees, entries: data.entries, advances: data.advances || [], updatedAt: new Date().toISOString() });
+    state = normalizeState(L.mergeConcurrentState(state, imported, state));
     saveState();
     resetEntryForm();
     renderAll();

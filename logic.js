@@ -283,19 +283,23 @@
 
   function mergeConcurrentState(base, local, remote) {
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-    const deletedAdvances = new Set([...(local.deletedAdvances || []), ...(remote.deletedAdvances || [])]);
-    const merged = { ...remote, version: Math.max(local.version || 0, remote.version || 0), updatedAt: local.updatedAt,
-      deletedAdvances: [...deletedAdvances] };
+    const deletionKeys = { employees: "deletedEmployees", entries: "deletedEntries", advances: "deletedAdvances" };
+    const merged = { ...remote, version: Math.max(local.version || 0, remote.version || 0), updatedAt: local.updatedAt };
     for (const collection of ["employees", "entries", "advances"]) {
+      const deletionKey = deletionKeys[collection];
+      const deleted = new Set([...(base?.[deletionKey] || []), ...(local[deletionKey] || []), ...(remote[deletionKey] || [])]);
+      merged[deletionKey] = [...deleted];
       const baseRows = new Map((base?.[collection] || []).map((row) => [row.id, row]));
       const localRows = new Map((local[collection] || []).map((row) => [row.id, row]));
       const remoteRows = new Map((remote[collection] || []).map((row) => [row.id, row]));
       const result = [];
       for (const id of new Set([...baseRows.keys(), ...localRows.keys(), ...remoteRows.keys()])) {
         const previous = baseRows.get(id), ours = localRows.get(id), theirs = remoteRows.get(id);
-        if (collection === "advances") {
+        {
           // Missing rows from an outdated notebook are not deletion commands.
-          if (deletedAdvances.has(id)) continue;
+          if (deleted.has(id)) continue;
+          const employeeId = (ours || theirs || previous)?.employeeId;
+          if (collection !== "employees" && merged.deletedEmployees.includes(employeeId)) continue;
           if (!ours || !theirs) {
             const retained = ours || theirs || previous;
             if (retained) result.push(retained);
