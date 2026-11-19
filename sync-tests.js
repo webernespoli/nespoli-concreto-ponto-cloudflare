@@ -50,3 +50,27 @@ const restored = mergeConcurrentState(currentBackup, importedBackup, currentBack
 assert.equal(restored.advances.length, 2);
 assert.equal(restored.advances.find(row => row.id === 'original').value, 15);
 console.log('Backup mesclado preserva lançamentos ausentes; exclusão de colaborador não deixa registros órfãos.');
+
+// Every employee must keep all advances when three notebooks save independently.
+const roster = Array.from({length: 90}, (_, index) => ({id: `employee-${index}`, name: `Colaborador ${index}`}));
+const common = {...state([]), employees: roster};
+const devices = ['Vitoria', 'Notebook 2', 'Notebook 3'].map((author, notebook) => ({
+  ...common,
+  advances: roster.flatMap(employee => ['09','10','11','13'].map(day => ({
+    id: `${employee.id}-${notebook}-${day}`, employeeId: employee.id,
+    date: `2026-11-${day}`, value: 18, status: 'pending', createdBy: {name: author}
+  })))
+}));
+for (const order of [[0,1,2],[2,0,1],[1,2,0]]) {
+  let result = common;
+  for (const device of order) result = mergeConcurrentState(common, devices[device], result);
+  assert.equal(result.employees.length, 90);
+  for (const employee of roster) {
+    const advances = result.advances.filter(row => row.employeeId === employee.id);
+    assert.equal(advances.length, 12);
+    assert.equal(advances.reduce((total, row) => total + row.value, 0), 216);
+    assert.equal(advances.filter(row => row.createdBy.name === 'Vitoria').length, 4);
+  }
+  assert.equal(mergeConcurrentState(common, result, result).advances.length, 1080);
+}
+console.log('90 colaboradores simulados, três notebooks e 1.080 vales: quantidades, autoria e totais preservados.');

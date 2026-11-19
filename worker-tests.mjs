@@ -62,6 +62,21 @@ const conflictResponse = await worker.handleApi(new Request("http://local/api/st
 assert.equal(conflictResponse.status, 409);
 assert.equal((await conflictResponse.json()).revision, 1);
 
+// Above the previous 1 MB ceiling, preserve the record byte for byte.
+const largeState = { ...state, advances: [{ id: "large-record", note: "a".repeat(1_100_000), value: 18 }] };
+const largeSave = await worker.handleApi(new Request("http://local/api/state", {
+  method: "PUT", body: JSON.stringify({ state: largeState, baseRevision: 1 })
+}), env);
+assert.equal(largeSave.status, 200);
+const largeRead = await (await worker.handleApi(new Request("http://local/api/state"), env)).json();
+assert.equal(largeRead.state.advances[0].note.length, 1_100_000);
+const overLimit = await worker.handleApi(new Request("http://local/api/state", {
+  method: "PUT", body: JSON.stringify({ state: { ...largeState, padding: "a".repeat(800_000) }, baseRevision: 2 })
+}), env);
+assert.equal(overLimit.status, 413);
+assert.equal((await (await worker.handleApi(new Request("http://local/api/state"), env)).json()).revision, 2);
+console.log("Capacidade ampliada: salva mais de 1 MB e rejeita excesso preservando os dados anteriores.");
+
 const staticPage = builtWorker.serveStatic(new Request("http://local/"), "/");
 assert.equal(staticPage.status, 200);
 assert.match(await staticPage.text(), /usersDialog/);

@@ -358,7 +358,7 @@
   async function pushCloudState() {
     if (cloudWriting) {
       cloudWriteAgain = true;
-      return;
+      return false;
     }
     cloudWriting = true;
     try {
@@ -378,7 +378,7 @@
           updatePreview();
           cloudInitialized = true;
           setSaveStatus("synced", "Dados salvos na nuvem");
-          return;
+          return true;
         }
         rememberSyncedState(remote);
         merged.updatedAt = new Date().toISOString();
@@ -404,7 +404,7 @@
         updatePreview();
         if (JSON.stringify(state) !== JSON.stringify(confirmed)) cloudWriteAgain = true;
         else setSaveStatus("synced", "Dados salvos na nuvem");
-        return;
+        return true;
       }
       throw new Error("Outro aparelho está salvando • nova tentativa em instantes");
     } catch (error) {
@@ -412,6 +412,7 @@
       cloudInitialized = false;
       setSaveStatus("offline", error.message || "Sem conexão • toque para tentar");
       if (navigator.onLine) scheduleCloudSave(15000);
+      return false;
     } finally {
       cloudWriting = false;
       if (cloudWriteAgain) {
@@ -964,12 +965,12 @@
     const button = $("#refreshAdvancesBtn");
     button.disabled = true;
     button.textContent = "Atualizando…";
-    await initializeCloudSync();
+    const synced = await initializeCloudSync();
     renderEmployeeSelects();
     renderAdvances();
     button.disabled = false;
     button.textContent = "Atualizar da nuvem";
-    if (showConfirmation) toast("Lista de vales atualizada.");
+    if (showConfirmation) toast(synced ? "Lista de vales atualizada da nuvem." : "A atualização da nuvem ainda não foi concluída. Confira o aviso de salvamento.");
   }
 
   function saveAdvance(event) {

@@ -1,5 +1,6 @@
 const STATE_ID = "nespoli-concreto-main";
-const MAX_BODY_BYTES = 1_000_000;
+// Keep the complete state below D1's 2,000,000-byte row limit, including metadata.
+const MAX_BODY_BYTES = 1_800_000;
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const STATIC_FILES = /*__STATIC_FILES__*/ {};
 const textEncoder = new TextEncoder();
