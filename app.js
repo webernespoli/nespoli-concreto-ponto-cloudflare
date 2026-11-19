@@ -1580,15 +1580,18 @@
       if (dom.filterStatus.value === "absence" && !L.isAbsence(entry)) return false;
       if (["paid", "pending"].includes(dom.filterStatus.value) && !(forReport && L.isAbsence(entry)) && (L.isAbsence(entry) || entry.status !== dom.filterStatus.value)) return false;
       const periodStart = dom.filterStart.value;
-      const isPendingDay20Balance = forReport
-        && /^\d{4}-\d{2}-21$/.test(periodStart)
-        && entry.date === periodStart.slice(0, -2) + "20"
+      const isNovemberSettlement = periodStart === "2026-11-07" && dom.filterEnd.value === "2026-11-19";
+      const previousPaidDay = isNovemberSettlement ? "2026-11-06"
+        : /^\d{4}-\d{2}-21$/.test(periodStart) ? periodStart.slice(0, -2) + "20" : "";
+      const isPendingPreviousBalance = (forReport || isNovemberSettlement)
+        && previousPaidDay !== ""
+        && entry.date === previousPaidDay
         && entry.status === "pending"
         && !L.isAbsence(entry)
         && entry.valueMode === "balance8h"
         && getEmployee(entry.employeeId)?.paySchedule !== "monthlyFifthWeekday"
         && calculateEntry(entry).balanceMinutes > 0;
-      const isCarryover = isPendingDay20Balance || L.isBalanceCarryover(entry, periodStart, activePeriod);
+      const isCarryover = isPendingPreviousBalance || L.isBalanceCarryover(entry, periodStart, activePeriod);
       const belongsToFollowingPeriod = entry.carryToNextPeriod === true || (entry.valueMode === "balance8h" && /-21$/.test(String(entry.date || "")));
       if (activePeriod === "close20" && belongsToFollowingPeriod) return false;
       if (dom.filterStart.value && entry.date < dom.filterStart.value && !isCarryover) return false;
@@ -1776,7 +1779,9 @@
         ? "Novo ciclo: começa em 21/10, após o pagamento de 20/10. O relatório inclui o saldo de horas pendente de 20/10."
         : "Novo ciclo: começa no dia 22, após o pagamento do dia 21."
       : activePeriod === "close20"
-        ? `Ciclo de trabalho de ${dateBR(start)} a ${dateBR(end)}.`
+        ? start === "2026-11-07" && end === "2026-11-19"
+          ? "Pagamento antecipado em 19/11: jornadas de 07/11 a 19/11 e saldo de horas excedentes ainda pendente de 06/11."
+          : `Ciclo de trabalho de ${dateBR(start)} a ${dateBR(end)}.`
         : activePeriod === "custom"
           ? "Período escolhido manualmente nos filtros abaixo."
           : "";

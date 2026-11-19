@@ -217,6 +217,7 @@
     if (type === "close20") {
       const targetMonth = day < 8 ? month - 1 : month;
       const start = toISO(new Date(year, targetMonth, 8));
+      if (start === "2026-11-08") return { start: "2026-11-07", end: "2026-11-19" };
       return { start, end: start === "2026-10-08" ? "2026-10-20" : toISO(new Date(year, targetMonth, 21)) };
     }
     if (type === "month") {
