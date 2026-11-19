@@ -95,6 +95,18 @@ async function ensureSchema(db) {
       updated_at TEXT NOT NULL
     )
   `).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS app_state_history (
+    id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL,
+    PRIMARY KEY (id, revision)
+  )`).run();
+  await db.prepare(`CREATE TRIGGER IF NOT EXISTS archive_app_state
+    BEFORE UPDATE OF payload ON app_state
+    WHEN OLD.payload != NEW.payload
+    BEGIN
+      INSERT OR IGNORE INTO app_state_history (id, revision, payload, updated_at)
+        VALUES (OLD.id, OLD.revision, OLD.payload, OLD.updated_at);
+      DELETE FROM app_state_history WHERE id = OLD.id AND revision < NEW.revision - 100;
+    END`).run();
 }
 
 async function readState(db) {
@@ -128,6 +140,13 @@ async function writeState(request, db, actor = null) {
   if (actor) {
     const previous = await readState(db);
     if (previous.revision !== baseRevision) return json(previous, 409);
+    const deleted = new Set([...(previous.state?.deletedAdvances || []), ...(Array.isArray(nextState.deletedAdvances) ? nextState.deletedAdvances : [])]
+      .filter((id) => typeof id === "string"));
+    const advances = new Map((previous.state?.advances || []).map((advance) => [advance.id, advance]));
+    for (const advance of nextState.advances) advances.set(advance.id, advance);
+    for (const id of deleted) advances.delete(id);
+    nextState.advances = [...advances.values()];
+    nextState.deletedAdvances = [...deleted];
     stampRecordAuthors(nextState, previous.state, actor);
   }
   const payload = JSON.stringify(nextState);
@@ -221,6 +240,20 @@ export default {
       }
       if (url.pathname === "/api/me" && request.method === "GET") return json({ user: actor, needsSetup: actor.role === "setup" });
       if (url.pathname === "/api/users") return manageUsers(request, env, actor);
+      if (url.pathname === "/api/state-history" && request.method === "GET") {
+        if (actor.role !== "admin") return json({ error: "Somente o administrador pode baixar cópias anteriores." }, 403);
+        await ensureSchema(env.DB);
+        const revision = url.searchParams.get("revision");
+        if (revision !== null) {
+          const row = await env.DB.prepare("SELECT payload, updated_at FROM app_state_history WHERE id = ? AND revision = ?")
+            .bind(STATE_ID, Number(revision)).first();
+          if (!row) return json({ error: "Cópia não encontrada." }, 404);
+          return json({ data: JSON.parse(row.payload), exportedAt: new Date().toISOString() });
+        }
+        const rows = await env.DB.prepare("SELECT revision, updated_at FROM app_state_history WHERE id = ? ORDER BY revision DESC LIMIT 100")
+          .bind(STATE_ID).all();
+        return json({ versions: rows.results });
+      }
       if (url.pathname === "/api/state") return handleApi(request, env, actor);
       if (["GET", "HEAD"].includes(request.method)) return serveStatic(request, url.pathname);
       return json({ error: "Método não permitido." }, 405);

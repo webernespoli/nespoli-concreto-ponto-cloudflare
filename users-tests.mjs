@@ -68,6 +68,23 @@ assert.equal((await api('/api/state', 'PUT', { state: cloud.state, baseRevision:
 cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
 assert.equal(cloud.state.advances[0].createdBy.name, 'Alice');
 assert.equal(cloud.state.advances[0].updatedBy.name, 'Weber');
+// An outdated client may omit advances, but only explicit deletion can remove them.
+const beforeOmission = cloud.revision;
+assert.equal((await api('/api/state', 'PUT', { state: { ...cloud.state, advances: [] }, baseRevision: beforeOmission }, operatorCookie)).status, 200);
+cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+assert.equal(cloud.state.advances.length, 1);
+assert.equal(cloud.state.advances[0].value, 35);
+const history = await (await api('/api/state-history', 'GET', null, adminCookie)).json();
+assert.ok(history.versions.length >= 1);
+assert.equal((await api('/api/state-history', 'GET', null, operatorCookie)).status, 403);
+const snapshot = await (await api('/api/state-history?revision=1', 'GET', null, adminCookie)).json();
+assert.equal(snapshot.data.advances[0].value, 30);
+assert.equal((await api('/api/state', 'PUT', { state: { ...cloud.state, advances: [], deletedAdvances: ['vale-1'] }, baseRevision: cloud.revision }, operatorCookie)).status, 200);
+cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+assert.equal(cloud.state.advances.length, 0);
+assert.equal((await api('/api/state', 'PUT', { state, baseRevision: cloud.revision }, operatorCookie)).status, 200);
+cloud = await (await api('/api/state', 'GET', null, adminCookie)).json();
+assert.equal(cloud.state.advances.length, 0);
 response = await api('/api/users', 'PATCH', { ...operator, active: false }, adminCookie);
 assert.equal(response.status, 200);
 assert.equal((await api('/api/me', 'GET', null, operatorCookie)).status, 401);

@@ -14,7 +14,7 @@ class MemoryDB {
       bind(...values) {
         return {
           async run() {
-            if (/CREATE TABLE/i.test(sql)) return { success: true };
+            if (/CREATE (TABLE|TRIGGER)/i.test(sql)) return { success: true };
             throw new Error(`SQL inesperado em run: ${sql}`);
           },
           async first() {
@@ -30,7 +30,7 @@ class MemoryDB {
         };
       },
       async run() {
-        if (/CREATE TABLE/i.test(sql)) return { success: true };
+        if (/CREATE (TABLE|TRIGGER)/i.test(sql)) return { success: true };
         throw new Error(`SQL inesperado em run: ${sql}`);
       }
     };

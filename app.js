@@ -253,7 +253,27 @@
   }
 
   function persistLocalState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const serialized = JSON.stringify(state);
+    const previous = localStorage.getItem(STORAGE_KEY);
+    if (previous && previous !== serialized) {
+      try {
+        const key = `${STORAGE_KEY}_checkpoints`;
+        const versions = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!versions.some((version) => version.data === previous)) {
+          versions.unshift({ savedAt: new Date().toISOString(), data: previous });
+        }
+        while (versions.length > 6 || JSON.stringify(versions).length > 300000) versions.pop();
+        localStorage.setItem(key, JSON.stringify(versions));
+      } catch (error) {
+        console.warn("Cópia anterior indisponível", error);
+      }
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, serialized);
+    } catch (error) {
+      localStorage.removeItem(`${STORAGE_KEY}_checkpoints`);
+      localStorage.setItem(STORAGE_KEY, serialized);
+    }
   }
 
   function hasBusinessData(data) {
@@ -327,7 +347,7 @@
           ? normalizeState(cloud.state) : defaultState();
         cloudRevision = Number(cloud.revision) || 0;
         const merged = normalizeState(L.mergeConcurrentState(syncedState, state, remote));
-        const sameData = ["employees", "entries", "advances"].every((key) => JSON.stringify(merged[key]) === JSON.stringify(remote[key]));
+        const sameData = ["employees", "entries", "advances", "deletedAdvances"].every((key) => JSON.stringify(merged[key]) === JSON.stringify(remote[key]));
         if (sameData && remote.version >= 15) {
           state = merged;
           rememberSyncedState(remote);
@@ -632,6 +652,7 @@
     if (!confirm(message)) return;
     state.employees = state.employees.filter((item) => item.id !== employee.id);
     state.entries = state.entries.filter((entry) => entry.employeeId !== employee.id);
+    state.deletedAdvances = [...new Set([...(state.deletedAdvances || []), ...state.advances.filter((advance) => advance.employeeId === employee.id).map((advance) => advance.id)])];
     state.advances = state.advances.filter((advance) => advance.employeeId !== employee.id);
     saveState();
     resetEmployeeForm();
@@ -999,6 +1020,7 @@
       return;
     }
     if (!confirm(`Excluir o vale de ${currency.format(advance.value)} de ${dateBR(advance.date)}?`)) return;
+    state.deletedAdvances = [...new Set([...(state.deletedAdvances || []), advance.id])];
     state.advances = state.advances.filter((item) => item.id !== advance.id);
     saveState();
     resetAdvanceForm();
@@ -1022,7 +1044,7 @@
     dom.advanceFilterEmployee.value = "all";
     dom.advanceFilterStart.value = "";
     dom.advanceFilterEnd.value = "";
-    dom.advanceFilterStatus.value = "pending";
+    dom.advanceFilterStatus.value = "all";
     renderAdvances();
   }
 

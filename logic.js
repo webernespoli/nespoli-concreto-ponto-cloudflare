@@ -283,7 +283,9 @@
 
   function mergeConcurrentState(base, local, remote) {
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-    const merged = { ...remote, version: Math.max(local.version || 0, remote.version || 0), updatedAt: local.updatedAt };
+    const deletedAdvances = new Set([...(local.deletedAdvances || []), ...(remote.deletedAdvances || [])]);
+    const merged = { ...remote, version: Math.max(local.version || 0, remote.version || 0), updatedAt: local.updatedAt,
+      deletedAdvances: [...deletedAdvances] };
     for (const collection of ["employees", "entries", "advances"]) {
       const baseRows = new Map((base?.[collection] || []).map((row) => [row.id, row]));
       const localRows = new Map((local[collection] || []).map((row) => [row.id, row]));
@@ -291,6 +293,15 @@
       const result = [];
       for (const id of new Set([...baseRows.keys(), ...localRows.keys(), ...remoteRows.keys()])) {
         const previous = baseRows.get(id), ours = localRows.get(id), theirs = remoteRows.get(id);
+        if (collection === "advances") {
+          // Missing rows from an outdated notebook are not deletion commands.
+          if (deletedAdvances.has(id)) continue;
+          if (!ours || !theirs) {
+            const retained = ours || theirs || previous;
+            if (retained) result.push(retained);
+            continue;
+          }
+        }
         if (!previous) {
           // On the first connection, recover unsent records from either device.
           const latest = !ours ? theirs : !theirs ? ours

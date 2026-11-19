@@ -8,6 +8,7 @@ const files = [
   ["/logic.js", "logic.js"],
   ["/app.js", "app.js"],
   ["/users.js", "users.js"],
+  ["/recovery.js", "recovery.js"],
   ["/logo-nespoli-concreto.png", "logo-nespoli-concreto.png"],
   ["/logo-nespoli-bi.svg", "logo-nespoli-bi.svg"]
 ];
